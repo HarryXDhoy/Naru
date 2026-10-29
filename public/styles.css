@@ -166,6 +166,20 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .chat.empty .dock::before{display:none}
 .chat.empty .composer{box-shadow:var(--shadow-3)}
 
+/* Messages waiting for the current task */
+.message-queue{max-width:720px;margin:0 auto 8px;padding:8px 12px;background:var(--bg-1);border-radius:var(--radius-10);box-shadow:var(--shadow-2)}
+.queue-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-3)}
+.queue-head strong{color:var(--text-1);font-weight:600}
+.queue-head .btn{margin-left:auto}
+.queue-error{margin:6px 0;color:var(--danger);font-size:12px;overflow-wrap:anywhere}
+.queue-list{list-style:none;max-height:180px;overflow-y:auto;margin:6px 0 0;padding:0}
+.queue-item{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-top:1px solid var(--bg-alpha-2);font-size:13px}
+.queue-number{color:var(--text-4);padding-top:5px}
+.queue-content{flex:1;min-width:0;padding-top:4px}
+.queue-text{white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+.queue-files{color:var(--text-3);font-size:12px;overflow-wrap:anywhere}
+.queue-actions{display:flex;flex:none}
+
 /* Composer (ego Composer) */
 .composer{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:var(--space-8);background:var(--bg-1);border-radius:var(--radius-10);box-shadow:var(--shadow-2);padding:var(--space-12);transition:box-shadow .15s var(--ease-standard)}
 .composer:focus-within{box-shadow:0 0 0 1px var(--accent),var(--shadow-2)}

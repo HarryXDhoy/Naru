@@ -36,6 +36,9 @@ Run {id,session_id,provider_id,model,status,started_at,finished_at,error,usage,a
 POST /api/runs/:id/cancel; POST /api/runs/:id/resume -> {run_id}; GET /api/runs/:id -> {run,events,approvals}.
 Event {id,run_id,type,data,created_at}; type status|note|delta|tool_call|tool_result|usage|error. Streamed text is buffered in memory and written as coalesced delta events, not one row per token.
 
+## Message queue
+POST /api/sessions/:id/queue enqueues a message with its provider, model, mode, selected skills and settings; PATCH or DELETE /api/sessions/:id/queue/:queue_id edits or removes it. The session view includes the queue and its pause state. Entries are dispatched in order after a successful run, and remain paused after failure, cancellation or restart until POST /api/sessions/:id/queue/resume. Dispatch uses the more restrictive access mode of the saved and current settings.
+
 ## Tools and approvals
 Tools: load_skill, read_skill_file, list_files, read_file, search_files, git_status, git_diff, write_file (overwrite only when asked), edit_file (exact unique old_text, atomic, keeps file mode), run_command, fetch_url, browser_search. browser_read is disabled until browser requests can be isolated from private networks. File tools are restricted to configured workspace or report paths except in full_access mode. Shell commands run as the current OS user without a filesystem sandbox.
 Settings access_mode is manual (default), auto_approve (file changes and commands; skill loading, conversation search and Git diff require approval), or full_access (all tools). Access mode is captured for each new run; resumed pending actions require fresh approval.

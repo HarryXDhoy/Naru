@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Naru: local, durable, provider-neutral personal agent workspace."""
-import argparse, base64, datetime as dt, hashlib, html, http.client, ipaddress, json, mimetypes, os, re, secrets, shutil, signal, socket, sqlite3, stat, subprocess, sys, tempfile, threading, time, uuid
+import argparse, contextlib, base64, datetime as dt, hashlib, html, http.client, ipaddress, json, mimetypes, os, re, secrets, shutil, signal, socket, sqlite3, stat, subprocess, sys, tempfile, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, unquote, quote, parse_qs, urlencode, urljoin
@@ -11,9 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 import providers
 import accounts
 
-VERSION='0.2.5'
-TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings'}
-INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',)}
+VERSION='0.2.6'
+TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings','queued_messages'}
+INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',),'queued_messages':('session_id',)}
 ACTIVE=('running','awaiting_approval')
 APPROVAL_TOOLS={'write_file','edit_file','run_command','search_sessions','git_diff','load_skill'}
 SENSITIVE_APPROVALS={'search_sessions','git_diff','load_skill'}
@@ -26,7 +26,7 @@ class Store:
     def __init__(self, directory):
         self.directory=Path(directory).expanduser().resolve(); self.directory.mkdir(parents=True,exist_ok=True)
         os.chmod(self.directory,0o700)
-        self.lock=threading.RLock();self.rev=0
+        self.lock=threading.RLock();self.rev=0;self._transaction=False
         self.db=sqlite3.connect(self.directory/'naru.sqlite',check_same_thread=False)
         self.db.execute('PRAGMA journal_mode=WAL'); self.db.execute('PRAGMA synchronous=FULL')
         for table in TABLES:self.db.execute(f'CREATE TABLE IF NOT EXISTS {table} (id TEXT PRIMARY KEY,data TEXT NOT NULL)')
@@ -71,12 +71,27 @@ class Store:
     def put(self,table,data):
         assert table in TABLES
         with self.lock:
-            self.db.execute(f'INSERT INTO {table}(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(data['id'],json.dumps(data,ensure_ascii=False))); self.db.commit()
+            self.db.execute(f'INSERT INTO {table}(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data',(data['id'],json.dumps(data,ensure_ascii=False)));
+            if not self._transaction:self.db.commit()
             if not (table=='events' and data.get('type')=='delta'):self.rev+=1
         return data
     def delete(self,table,id):
         assert table in TABLES
-        with self.lock:self.db.execute(f'DELETE FROM {table} WHERE id=?',(id,));self.db.commit();self.rev+=1
+        with self.lock:
+            self.db.execute(f'DELETE FROM {table} WHERE id=?',(id,))
+            if not self._transaction:self.db.commit()
+            self.rev+=1
+    @contextlib.contextmanager
+    def transaction(self):
+        with self.lock:
+            if self._transaction:raise RuntimeError('nested transaction')
+            self.db.execute('BEGIN IMMEDIATE');self._transaction=True;rev=self.rev
+            try:
+                yield
+                self.db.commit()
+            except BaseException:
+                self.db.rollback();self.rev=rev;raise
+            finally:self._transaction=False
     def patch(self,table,id,**changes):
         with self.lock:
             d=self.get(table,id)
@@ -196,6 +211,8 @@ class Runtime:
                 self.store.patch('runs',r['id'],status='interrupted',error='앱이 종료되어 중단되었습니다. 기록을 확인한 뒤 재개할 수 있습니다.')
         for a in self.store.all('approvals'):
             if a['status']=='pending':self.store.patch('approvals',a['id'],status='expired')
+        for sid in {q['session_id'] for q in self.store.all('queued_messages')}:
+            if self.store.get('sessions',sid):self.store.patch('sessions',sid,queue_paused=True)
     def init_defaults(self,workspace):
         if not self.store.get('settings','main'):
             self.store.put('settings',{'id':'main','workspace':str(Path(workspace).expanduser().resolve()),'report_directory':str(Path.home()/'OneDrive/Business/Reading & Reports'),'max_steps':12,'max_output_tokens':4096,'system_prompt':'사용자의 개인 AI 동료로 일하세요. 사용자의 언어로 명확하게 답하세요. 출처와 사실을 구분하고 도구 결과가 뒷받침하는 완료만 보고하세요.'})
@@ -266,11 +283,12 @@ class Runtime:
         for r in runs:
             if r['status'] in ACTIVE:
                 state=self.live.get(r['id']);live={'run_id':r['id'],'text':state['text'] if state else ''}
-        return {'session':s,'messages':self.store.where('messages','session_id',id),'runs':[self.public_run(r) for r in runs],'events':self.store.where_in('events','run_id',rids,skip_type='delta'),'approvals':self.store.where_in('approvals','run_id',rids),'artifacts':self.store.where('artifacts','session_id',id),'live':live,'rev':rev}
+        return {'session':s,'messages':self.store.where('messages','session_id',id),'runs':[self.public_run(r) for r in runs],'events':self.store.where_in('events','run_id',rids,skip_type='delta'),'approvals':self.store.where_in('approvals','run_id',rids),'artifacts':self.store.where('artifacts','session_id',id),'queue':[self.public_queue(q) for q in self.store.where('queued_messages','session_id',id)],'queue_paused':bool(s.get('queue_paused',False)),'queue_error':s.get('queue_error',''),'live':live,'rev':rev}
     def live_view(self,sid):
         rid=self.active.get(sid);status=self.store.field('runs',rid,'status') if rid else None
         state=self.live.get(rid) if rid else None
         return {'rev':self.store.rev,'run_id':rid,'status':status,'text':state['text'] if state else ''}
+    def public_queue(self,q):return {k:v for k,v in q.items() if k!='settings'}
     def public_run(self,r):return {k:v for k,v in r.items() if k not in ('context','pending_calls','settings','skill_ids','tool_cursor','loadable_skills')}
     def provider(self,id):
         p=self.store.get('providers',id)
@@ -389,10 +407,11 @@ class Runtime:
     def test_provider(self,p):return accounts.test(p) if p['kind'] in accounts.KINDS else providers.test_provider(p)
 
     # ---- runs -----------------------------------------------------------
-    def start(self,sid,body,resume=None,regenerate=False):
+    def start(self,sid,body,resume=None,regenerate=False,queued=None,defer=False):
         with self.lock:
             s=self.session(sid)
-            if any(r['status'] in ACTIVE for r in self.store.where('runs','session_id',sid)):raise ValueError('이 대화에서 작업이 이미 진행 중입니다.')
+            if sid in self.active or any(r['status'] in ACTIVE for r in self.store.where('runs','session_id',sid)):raise ValueError('이 대화에서 작업이 이미 진행 중입니다.')
+            if not queued and not resume and self.store.where('queued_messages','session_id',sid):raise ValueError('대기 중인 메시지를 먼저 처리하거나 삭제하세요.')
             old=None;project_files=[];replace_message_id=None
             if resume:
                 old=self.store.get('runs',resume)
@@ -426,7 +445,10 @@ class Runtime:
                 for m in reversed(history):
                     if size+len(m['content'])>65000 and limited:break
                     limited.insert(0,m);size+=len(m['content'])
-                settings=self.settings()
+                settings=dict(queued['settings']) if queued else self.settings()
+                if queued:
+                    ranks={'manual':0,'auto_approve':1,'full_access':2};current=self.settings().get('access_mode','manual');original=settings.get('access_mode','manual')
+                    settings['access_mode']=min((current,original),key=lambda x:ranks.get(x,0))
                 registered_skills=self.store.all('skills')
                 loadable_skills={str(s['id']):s for s in registered_skills if s.get('enabled')}
                 selected_ids={str(sid) for sid in skill_ids}
@@ -444,8 +466,87 @@ class Runtime:
             if project_files:self.event(id,'status',{'text':'작업 폴더의 프로젝트 지침을 모델에 전달합니다: '+', '.join(project_files)})
             cancel=threading.Event();self.controls[id]=cancel;self.active[sid]=id
             self.live[id]={'text':'','buf':'','t':time.monotonic()}
-            threading.Thread(target=self.execute,args=(id,cancel),daemon=True).start()
+            if not defer:threading.Thread(target=self.execute,args=(id,cancel),daemon=True).start()
             return {'run_id':id}
+    def enqueue(self,sid,body):
+        with self.lock:
+            session=self.session(sid);content=str(body.get('content','')).strip()
+            if not content or len(content)>100000:raise ValueError('메시지는 1~100,000자여야 합니다.')
+            provider_id=body.get('provider_id') or session.get('provider_id')
+            p=self.store.get('providers',provider_id)
+            if not p:raise ValueError('연결할 모델 제공자를 선택해 주세요.')
+            model=body.get('model',session.get('model','')) or p.get('model','');mode=body.get('mode',session.get('mode','chat'))
+            if mode not in ('chat','agent'):raise ValueError('올바른 실행 모드를 선택해 주세요.')
+            if p['kind']!='codex' and p['kind'] not in accounts.KINDS and not model:raise ValueError('모델 이름을 입력하거나 목록에서 선택해 주세요.')
+            skill_ids=body.get('skill_ids',[])
+            if not isinstance(skill_ids,list) or len(skill_ids)>100 or not all(isinstance(x,str) and len(x)<=128 for x in skill_ids):raise ValueError('올바른 스킬을 선택해 주세요.')
+            if len(self.store.where('queued_messages','session_id',sid))>=100:raise ValueError('대기 메시지는 100개까지 추가할 수 있습니다.')
+            q=dict(id=uid(),session_id=sid,content=content,provider_id=provider_id,model=model,mode=mode,skill_ids=skill_ids,settings=self.settings(),created_at=now())
+            self.store.put('queued_messages',q)
+            runs=self.store.where('runs','session_id',sid)
+            if sid not in self.active and not any(r['status'] in ACTIVE for r in runs):
+                if runs and runs[-1]['status']!='completed':
+                    self.store.patch('sessions',sid,queue_paused=True)
+                elif not session.get('queue_paused'):self.dispatch_queue(sid)
+            return {'queued':self.public_queue(q)}
+    def change_queue(self,sid,qid,body=None,delete=False):
+        with self.lock:
+            self.session(sid);q=self.store.get('queued_messages',qid)
+            if not q or q.get('session_id')!=sid:raise ValueError('대기 메시지를 찾을 수 없습니다.')
+            if delete:
+                self.store.delete('queued_messages',qid)
+                if not self.store.where('queued_messages','session_id',sid):self.store.patch('sessions',sid,queue_paused=False,queue_error='')
+                return {'ok':True}
+            content=str((body or {}).get('content','')).strip()
+            if not content or len(content)>100000:raise ValueError('메시지는 1~100,000자여야 합니다.')
+            return {'queued':self.public_queue(self.store.patch('queued_messages',qid,content=content))}
+    def dispatch_queue(self,sid,resume=False):
+        with self.lock:
+            session=self.session(sid);queue=self.store.where('queued_messages','session_id',sid)
+            if not queue:
+                if resume:raise ValueError('대기 중인 메시지가 없습니다.')
+                return None
+            if sid in self.active or any(r['status'] in ACTIVE for r in self.store.where('runs','session_id',sid)):
+                if resume:raise ValueError('진행 중인 작업이 끝난 뒤 재개하세요.')
+                return None
+            if session.get('queue_paused') and not resume:return None
+            q=queue[0];started=None
+            try:
+                with self.store.transaction():
+                    available={s['id'] for s in self.store.all('skills') if s.get('enabled')}
+                    if any(skill not in available for skill in q.get('skill_ids',[])):raise ValueError('선택한 스킬을 찾을 수 없거나 사용할 수 없습니다.')
+                    self.store.patch('sessions',sid,queue_paused=False,queue_error='')
+                    started=self.start(sid,q,queued=q,defer=True)
+                    self.store.delete('queued_messages',q['id'])
+            except Exception as exc:
+                if started:
+                    run_id=started['run_id'];self.controls.pop(run_id,None);self.live.pop(run_id,None)
+                    if self.active.get(sid)==run_id:self.active.pop(sid,None)
+                self.store.patch('sessions',sid,queue_paused=True,queue_error=str(exc)[:500])
+                if resume:raise ValueError('대기 메시지를 시작하지 못했습니다: '+str(exc)[:300]) from None
+                return None
+            run_id=started['run_id']
+            try:threading.Thread(target=self.execute,args=(run_id,self.controls[run_id]),daemon=True).start()
+            except Exception as exc:
+                # The message is already recorded. Keep it visible and pause the remainder.
+                self.controls.pop(run_id,None);self.live.pop(run_id,None);self.active.pop(sid,None)
+                self.store.patch('runs',run_id,status='interrupted',error='작업을 시작하지 못했습니다.',finished_at=now())
+                self.store.patch('sessions',sid,queue_paused=True,queue_error='작업을 시작하지 못했습니다. 실행 기록을 확인해 주세요.')
+                if resume:raise ValueError('작업을 시작하지 못했습니다. 실행 기록을 확인해 주세요.') from exc
+            return started
+    def delete_session(self,sid):
+        with self.lock:
+            self.session(sid);runs=self.store.where('runs','session_id',sid)
+            if sid in self.active or any(r['status'] in ACTIVE for r in runs):raise ValueError('실행을 중지한 뒤 대화를 삭제하세요.')
+            rids=[r['id'] for r in runs]
+            with self.store.transaction():
+                for table in ('messages','artifacts','queued_messages'):
+                    for item in self.store.where(table,'session_id',sid):self.store.delete(table,item['id'])
+                for table in ('events','approvals'):
+                    for item in self.store.where_in(table,'run_id',rids):self.store.delete(table,item['id'])
+                for rid in rids:self.store.delete('runs',rid)
+                self.store.delete('sessions',sid)
+            return {'ok':True}
     def regenerate(self,sid,body=None):
         with self.lock:
             self.session(sid)
@@ -794,6 +895,9 @@ class Runtime:
             with self.lock:
                 self.controls.pop(id,None);self.live.pop(id,None)
                 if self.active.get(run['session_id'])==id:self.active.pop(run['session_id'],None)
+                if self.store.where('queued_messages','session_id',run['session_id']):
+                    if self.store.field('runs',id,'status')=='completed':self.dispatch_queue(run['session_id'])
+                    else:self.store.patch('sessions',run['session_id'],queue_paused=True)
     def cancel(self,id):
         with self.lock:
             if id in self.controls:self.controls[id].set()
@@ -927,18 +1031,14 @@ class Handler(BaseHTTPRequestHandler):
                     if len(parts)==3:
                         if method=='GET':return self.send(rt.session_view(sid))
                         if method=='PATCH':return self.send(db.patch('sessions',sid,**{k:v for k,v in body.items() if k in ('title','provider_id','model','mode')},updated_at=now()))
-                        if method=='DELETE':
-                            runs=db.where('runs','session_id',sid)
-                            if any(r['status'] in ACTIVE for r in runs):raise ValueError('실행을 중지한 뒤 대화를 삭제하세요.')
-                            rids=[r['id'] for r in runs]
-                            for table in ('messages','artifacts'):
-                                for item in db.where(table,'session_id',sid):db.delete(table,item['id'])
-                            for table in ('events','approvals'):
-                                for item in db.where_in(table,'run_id',rids):db.delete(table,item['id'])
-                            for rid in rids:db.delete('runs',rid)
-                            db.delete('sessions',sid);return self.send({'ok':True})
+                        if method=='DELETE':return self.send(rt.delete_session(sid))
                     if len(parts)==4 and parts[3]=='live' and method=='GET':return self.send(rt.live_view(sid))
                     if len(parts)==4 and parts[3]=='messages' and method=='POST':return self.send(rt.start(sid,body))
+                    if len(parts)==4 and parts[3]=='queue' and method=='POST':return self.send(rt.enqueue(sid,body))
+                    if len(parts)==5 and parts[3]=='queue':
+                        if parts[4]=='resume' and method=='POST':return self.send(rt.dispatch_queue(sid,resume=True))
+                        if method=='PATCH':return self.send(rt.change_queue(sid,parts[4],body))
+                        if method=='DELETE':return self.send(rt.change_queue(sid,parts[4],delete=True))
                     if len(parts)==4 and parts[3]=='regenerate' and method=='POST':return self.send(rt.regenerate(sid,body))
                     if len(parts)==4 and parts[3]=='export' and method=='GET':
                         view=rt.session_view(sid);text='# '+s['title']+'\n\n'+'\n\n'.join('## '+('나' if m['role']=='user' else 'Naru')+'\n\n'+m['content'] for m in view['messages'])

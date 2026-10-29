@@ -230,17 +230,19 @@ function renderMain(){if(S.view!=='chat')stopHero();if(S.view==='chat')renderCha
 // ---------- chat ----------
 function renderChat(){
  stopHero();
- $('main').innerHTML=`<div class="chat" id="chat"><div class="hero" id="hero" hidden><div class="hero-pattern" aria-hidden="true"><span></span></div><h1 class="hero-title">무엇을 할까요?</h1></div><div class="thread" id="thread"><div class="col" id="col"></div></div><div class="dock"><form class="composer" id="composer" autocomplete="off"><div class="files-row" id="file-chips" hidden></div><label class="sr" for="input">메시지</label><textarea id="input" rows="1" placeholder="메시지 입력" spellcheck="false"></textarea><div class="tools" id="tools"></div><input type="file" id="file-input" multiple hidden></form></div></div><aside class="drawer ${S.drawer&&S.detail?'open':''}" id="drawer" aria-label="파일과 실행 정보"><div class="drawer-in" id="drawer-in"></div></aside>`;
+ $('main').innerHTML=`<div class="chat" id="chat"><div class="hero" id="hero" hidden><div class="hero-pattern" aria-hidden="true"><span></span></div><h1 class="hero-title">무엇을 할까요?</h1></div><div class="thread" id="thread"><div class="col" id="col"></div></div><div class="dock"><div id="message-queue" hidden></div><form class="composer" id="composer" autocomplete="off"><div class="files-row" id="file-chips" hidden></div><label class="sr" for="input">메시지</label><textarea id="input" rows="1" placeholder="메시지 입력" spellcheck="false"></textarea><div class="tools" id="tools"></div><input type="file" id="file-input" multiple hidden></form></div></div><aside class="drawer ${S.drawer&&S.detail?'open':''}" id="drawer" aria-label="파일과 실행 정보"><div class="drawer-in" id="drawer-in"></div></aside>`;
  const input=$('input');input.value=S.drafts[draftKey()]||'';autosize();
- wireComposer();renderTools();renderChips();renderThread(true);renderDrawer();
+ wireComposer();renderTools();renderChips();renderQueue();renderThread(true);renderDrawer();
 }
 function autosize(){const el=$('input');if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,240)+'px';}
+const queuePending=()=>S.detail?.queue||[];
+const enqueueMode=()=>runActive()||queuePending().length>0;
 const canSend=()=>!S.sending&&!!(($('input')?.value||'').trim()||attachments().length);
 function syncSend(){const b=$('send');if(b)b.disabled=!canSend();}
 function wireComposer(){
  const input=$('input'),form=$('composer');
  input.addEventListener('input',()=>{S.drafts[draftKey()]=input.value;autosize();syncSend();});
- input.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing&&ev.keyCode!==229){ev.preventDefault();if(!runActive())send();}});
+ input.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing&&ev.keyCode!==229){ev.preventDefault();send();}});
  form.addEventListener('submit',ev=>{ev.preventDefault();send();});
  $('file-input').addEventListener('change',ev=>{addFiles([...ev.target.files]);ev.target.value='';});
  form.addEventListener('dragover',ev=>{if([...ev.dataTransfer.types].includes('Files')){ev.preventDefault();form.classList.add('drag');}});
@@ -254,8 +256,13 @@ function renderTools(){
  <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button></div>
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+'개'}</span>`:''}</button>
  <span class="grow"></span>
- ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:`<button type="submit" class="send" id="send" aria-label="보내기"${canSend()?'':' disabled'}>${icon('up')}</button>`}`;
+ ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:''}<button type="submit" class="send" id="send" title="${enqueueMode()?'대기열에 추가':'보내기'}" aria-label="${enqueueMode()?'대기열에 추가':'보내기'}"${canSend()?'':' disabled'}>${icon('up')}</button>`;
 }
+function queueHTML(items,paused,active,error){
+ if(!items.length)return '';
+ return `<section class="message-queue" aria-label="대기 메시지"><div class="queue-head"><strong>대기 메시지 ${items.length}</strong><span>${paused?'일시정지됨':'현재 작업이 끝나면 순서대로 보내요'}</span>${paused&&!active?'<button type="button" class="btn" data-act="queue-resume">계속</button>':''}</div>${error?`<p class="queue-error" role="alert">${esc(error)}</p>`:''}<ol class="queue-list">${items.map((item,i)=>{const parts=splitAttachments(item.content);return `<li class="queue-item"><span class="queue-number">${i+1}</span><div class="queue-content"><div class="queue-text">${esc(parts.text)}</div>${parts.files.length?`<div class="queue-files">첨부: ${parts.files.map(esc).join(', ')}</div>`:''}</div><div class="queue-actions">${iconBtn('edit','대기 메시지 편집','queue-edit',item.id)}${iconBtn('x','대기 메시지 삭제','queue-remove',item.id)}</div></li>`;}).join('')}</ol></section>`;
+}
+function renderQueue(){const el=$('message-queue');if(!el)return;const items=queuePending();el.hidden=!items.length;el.innerHTML=queueHTML(items,!!S.detail?.queue_paused,runActive(),S.detail?.queue_error);}
 function renderChips(){
  const el=$('file-chips');if(!el)return;const files=attachments();el.hidden=!files.length;
  el.innerHTML=files.map((f,i)=>`<span class="file-chip" title="${esc(f.name)}">${icon('doc')}<span>${esc(f.name)}</span><button type="button" data-act="remove-file" data-id="${i}" aria-label="${esc(f.name)} 빼기">${icon('x')}</button></span>`).join('');
@@ -440,7 +447,7 @@ async function loadDetail(timeout){
  S.detail=d;S.live=d.live?.text||'';
  if(providerById(d.session.provider_id)&&!S.sending){S.providerId=d.session.provider_id;S.model=d.session.model||'';S.mode=d.session.mode||S.mode;}
  if(S.view!=='chat')return;
- renderThread();renderTools();renderTop();renderDrawer();$('drawer')?.classList.toggle('open',S.drawer);
+ renderThread();renderTools();renderQueue();renderTop();renderDrawer();$('drawer')?.classList.toggle('open',S.drawer);
  const after=latestRun();
  if(before&&after&&before.id===after.id&&before.status!==after.status)onTransition(before.status,after.status);
 }
@@ -466,7 +473,7 @@ async function enableNotifications(){
 }
 async function send(){
  const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
- if((!text&&!files.length)||S.sending||runActive())return;
+ if((!text&&!files.length)||S.sending)return;
  const p=provider();
  if(!p){go('models');toast('먼저 모델을 연결하세요.');return;}
  const acct=accountOf(p);
@@ -477,17 +484,17 @@ async function send(){
  let content=text;
  if(files.length)content=(text||'첨부한 파일을 검토해 줘.')+ATTACH_HEAD+files.map(f=>`\n--- 첨부: ${f.name} ---\n${f.text}\n--- 첨부 끝 ---`).join('\n');
  if(content.length>100000){toast('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.',true);return;}
- const epoch=S.epoch,key=draftKey(),model=S.model,mode=S.mode,skillIds=selectedSkills().map(s=>s.id);S.sending=true;renderTools();
+ const epoch=S.epoch,key=draftKey(),model=S.model,mode=S.mode,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode();S.sending=true;renderTools();
  try{
   let sid=S.sid;
   if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode}});sid=s.id;if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}S.sid=sid;remember(sid);}}
-  await api(`/api/sessions/${enc(sid)}/messages`,{method:'POST',body:{content,provider_id:p.id,model,mode,skill_ids:skillIds}});
+  await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,provider_id:p.id,model,mode,skill_ids:skillIds}});
   if(S.drafts[key]===rawText)delete S.drafts[key];
   if(S.files[key]===files)delete S.files[key];
   if(key!==sid&&S.drafts[sid]===rawText)delete S.drafts[sid];
   if(key!==sid&&S.files[sid]===files)delete S.files[sid];
   if(S.epoch===epoch&&S.sid===sid&&$('input')){if($('input').value===rawText)$('input').value='';autosize();renderChips();}
-  S.data.active={...(S.data.active||{}),[sid]:'running'};
+  if(!queued)S.data.active={...(S.data.active||{}),[sid]:'running'};
   if(S.epoch===epoch&&S.sid===sid)await loadDetail();
   refreshState().then(()=>renderSide()).catch(()=>{});
  }catch(err){toast(err.message,true);}
@@ -657,6 +664,12 @@ async function submitForm(form,fn){
  const btn=form.querySelector('[type=submit]');btn&&(btn.disabled=true);
  try{await fn();}catch(err){dialogError(err.message);}finally{if(btn&&btn.isConnected)btn.disabled=false;}
 }
+function editQueue(id){
+ const sid=S.sid,item=queuePending().find(q=>String(q.id)===String(id));if(!sid||!item)return;
+ const parts=splitAttachments(item.content),at=String(item.content).indexOf(ATTACH_HEAD),suffix=at<0?'':String(item.content).slice(at);
+ openDialog('대기 메시지 편집',`<form class="form" id="queue-edit-form"><div class="field"><label for="queue-edit-text">메시지</label><textarea id="queue-edit-text" rows="6" maxlength="100000">${esc(parts.text)}</textarea>${parts.files.length?`<span class="hint">첨부는 그대로 유지돼요: ${parts.files.map(esc).join(', ')}</span>`:''}</div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`);
+ $('queue-edit-form').addEventListener('submit',ev=>{ev.preventDefault();submitForm(ev.currentTarget,async()=>{const text=$('queue-edit-text').value.trim();if(!text&&!suffix)throw new Error('메시지를 입력해 주세요.');const content=text+suffix;if(content.length>100000)throw new Error('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.');await api(`/api/sessions/${enc(sid)}/queue/${enc(id)}`,{method:'PATCH',body:{content}});closeDialog();if(S.sid===sid)await loadDetail();});});
+}
 const PRESETS={openai:{name:'OpenAI',kind:'responses',base_url:'https://api.openai.com/v1'},anthropic:{name:'Claude API',kind:'anthropic',base_url:'https://api.anthropic.com/v1'},gemini:{name:'Gemini API',kind:'gemini',base_url:'https://generativelanguage.googleapis.com/v1beta'},ollama:{name:'Ollama',kind:'ollama',base_url:'http://127.0.0.1:11434'},lmstudio:{name:'LM Studio',kind:'openai',base_url:'http://127.0.0.1:1234/v1'},openrouter:{name:'OpenRouter',kind:'openai',base_url:'https://openrouter.ai/api/v1'},custom:{name:'',kind:'openai',base_url:''}};
 const PRESET_NAMES=[['openai','OpenAI'],['anthropic','Claude API'],['gemini','Gemini API'],['ollama','Ollama'],['lmstudio','LM Studio'],['openrouter','OpenRouter 키'],['custom','직접 입력']];
 function editProvider(id){
@@ -811,6 +824,9 @@ const ACT={
  'model-menu':()=>pop&&pop.anchor===$('model-chip')?closePop():modelMenu(),
  'skills-menu':()=>pop&&pop.anchor===$('skill-chip')?closePop():skillsMenu(),
  'mode':async el=>{S.mode=el.dataset.mode;renderTools();if(S.sid)try{await api(`/api/sessions/${enc(S.sid)}`,{method:'PATCH',body:{mode:S.mode}});}catch(err){toast(err.message,true);}},
+ 'queue-edit':el=>editQueue(el.dataset.id),
+ 'queue-remove':async el=>{const sid=S.sid;el.disabled=true;await api(`/api/sessions/${enc(sid)}/queue/${enc(el.dataset.id)}`,{method:'DELETE'});if(S.sid===sid)await loadDetail();},
+ 'queue-resume':async el=>{const sid=S.sid;el.disabled=true;await api(`/api/sessions/${enc(sid)}/queue/resume`,{method:'POST',body:{}});if(S.sid===sid)await loadDetail();refreshState().then(()=>renderSide()).catch(()=>{});},
  'stop':async el=>{const r=latestRun();if(!r)return;el.disabled=true;await api(`/api/runs/${enc(r.id)}/cancel`,{method:'POST',body:{}});await loadDetail();},
  'resume':async el=>{el.disabled=true;await api(`/api/runs/${enc(el.dataset.id)}/resume`,{method:'POST',body:{}});S.data.active={...(S.data.active||{}),[S.sid]:'running'};await loadDetail();renderSide();},
  'regenerate':async el=>{el.disabled=true;await api(`/api/sessions/${enc(S.sid)}/regenerate`,{method:'POST',body:{provider_id:S.providerId,model:S.model,mode:S.mode,skill_ids:selectedSkills().map(s=>s.id)}});S.data.active={...(S.data.active||{}),[S.sid]:'running'};await loadDetail();renderSide();},
@@ -913,7 +929,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,S};return;}
 setInterval(tick,280);
 boot();
 })();
