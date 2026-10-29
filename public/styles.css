@@ -507,3 +507,9 @@ dialog.wide:not([open]){display:none}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+.update-setting{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.update-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--text-2)}
+.update-status.bad{color:var(--danger)}
+.update-version{color:var(--text-3);font-size:13px}
+.update-ready{color:var(--text-1);background:var(--bg-alpha-2)}

@@ -20,5 +20,5 @@ packager({
   appBundleId: 'app.naru.personal',
   appCategoryType: 'public.app-category.productivity',
   extendInfo: { NSHumanReadableCopyright: 'Naru · Personal AI workspace', NSHighResolutionCapable: true },
-  ignore: [/^\/\./, /^\/(?:_incoming|_backup[^/]*)(?:\/|$)/, /^\/(?:dist|tests|docs|workspace|data)(?:\/|$)/, /^\/node_modules(?:\/|$)/, /(?:^|\/)__pycache__(?:\/|$)/, /\.pyc$/, /\.log$/, /\.sqlite(?:-wal|-shm)?$/, /^\/desktop\/(?:icon\.iconset|security\.test\.cjs)(?:\/|$)/, /^\/scripts(?:\/|$)/, /^\/(?:Launch Naru\.command|README\.md|package-lock\.json)$/]
+  ignore: [/^\/\./, /^\/(?:_incoming|_backup[^/]*)(?:\/|$)/, /^\/(?:dist|tests|docs|workspace|data)(?:\/|$)/, /^\/node_modules(?:\/|$)/, /(?:^|\/)__pycache__(?:\/|$)/, /\.pyc$/, /\.log$/, /\.sqlite(?:-wal|-shm)?$/, /^\/desktop\/(?:icon\.iconset|security\.test\.cjs|updater\.test\.cjs)(?:\/|$)/, /^\/scripts(?:\/|$)/, /^\/(?:Launch Naru\.command|README\.md|package-lock\.json)$/]
 }).then(paths => { console.log('Packaged application:\n' + paths.join('\n')); }).catch(err => { console.error(err.message); process.exitCode = 1; });

@@ -214,7 +214,7 @@ function renderSide(){
  <button type="button" class="side-item strong" data-act="new" title="새 대화 (⌘N)">${icon('compose')}<span>새 대화</span></button>
  <button type="button" class="side-item" data-act="palette" title="검색 (⌘K)">${icon('search')}<span>검색</span></button>
  <nav class="sessions" aria-label="최근 대화">${d.sessions.map(s=>{const st=active[s.id],title=s.title||'새 대화';return `<div class="session-row"><button type="button" class="side-item" data-session="${esc(s.id)}" title="${esc(title)}"${S.view==='chat'&&S.sid===s.id?' aria-current="page"':''}><span>${esc(title)}</span>${st?`<i class="dot ${st==='awaiting_approval'?'att':''}" role="img" aria-label="${st==='awaiting_approval'?'확인 필요':'실행 중'}"></i>`:''}</button><button type="button" class="icon-btn session-delete" data-act="delete-chat" data-id="${esc(s.id)}" title="대화 삭제" aria-label="${esc(title)} 대화 삭제">${icon('trash')}</button></div>`;}).join('')}</nav>
- <nav class="side-nav" aria-label="관리">${nav.map(([v,ic,t])=>`<button type="button" class="side-item" data-view="${v}"${S.view===v?' aria-current="page"':''}>${icon(ic)}<span>${t}</span></button>`).join('')}</nav>`;
+ <nav class="side-nav" aria-label="관리">${S.update?.status==='ready'?`<button type="button" class="side-item update-ready" data-view="settings">${icon('download')}<span>업데이트 준비됨</span></button>`:''}${nav.map(([v,ic,t])=>`<button type="button" class="side-item" data-view="${v}"${S.view===v?' aria-current="page"':''}>${icon(ic)}<span>${t}</span></button>`).join('')}</nav>`;
 }
 function renderTop(){
  const t=$('top');if(!t)return;
@@ -225,6 +225,7 @@ function renderTop(){
  const lr=s?latestRun():null;
  if(lr&&ACTIVE.includes(lr.status))html+=lr.status==='awaiting_approval'?'<span class="badge attention">확인 필요</span>':'<span class="badge running"><i></i>실행 중</span>';
  html+='<span class="grow"></span>';
+ if(S.update?.status==='ready')html+=iconBtn('download','업데이트 준비됨','update-open');
  if(s){const n=S.detail.artifacts?.length||0;html+=`<button type="button" class="icon-btn ${S.drawer?'on':''}" data-act="drawer" title="파일과 실행 정보 (⌘J)" aria-label="파일과 실행 정보" aria-pressed="${S.drawer}">${icon('files')}${n?`<span class="count">${n}</span>`:''}</button>${iconBtn('more','대화 메뉴','chat-menu')}`;}
  t.innerHTML=html;
 }
@@ -714,7 +715,7 @@ function openDialog(title,body,{desc='',wide=false}={}){
  setTimeout(()=>dlg.querySelector('input:not([type=checkbox]):not([type=hidden]),textarea,select')?.focus(),0);
  return dlg;
 }
-function closeDialog(){const d=$('dialog');if(d.open)d.close();}
+function closeDialog(){if(applyingUpdate)return;const d=$('dialog');if(d.open)d.close();}
 function dialogError(msg){const e=$('dlg-err');if(e){e.hidden=false;e.textContent=msg;}else toast(msg,true);}
 function confirmDialog(title,desc,label,action){
  openDialog(title,`<div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="button" class="btn danger" id="confirm-yes">${esc(label)}</button></div>`,{desc});
@@ -915,6 +916,7 @@ function renderSettings(){
  $('main').innerHTML=page('설정',`<form class="form" id="settings-form">
  <h2>화면</h2><div class="seg wide" role="group" aria-label="밝기">${[['system','시스템'],['light','밝게'],['dark','어둡게']].map(([k,n])=>`<button type="button" data-act="theme" data-id="${k}" aria-pressed="${theme===k}">${n}</button>`).join('')}</div>
  <h2>알림</h2><div class="field" id="notification-setting">${notificationHTML()}</div>
+ <h2>업데이트</h2><div id="update-setting" class="update-setting" role="status" aria-live="polite">${updateHTML()}</div>
  <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">프로젝트 지침은 모델 제공자에게 전달돼요.</span></div>
  <div class="field"><label for="st-rp">보고서 폴더</label><div class="inrow"><input id="st-rp" name="report_directory" required value="${esc(x.report_directory)}">${picker('st-rp')}</div></div>
  <h2>도구 승인</h2><div class="field"><label for="st-access">접근 권한</label><select id="st-access" name="access_mode" aria-describedby="st-access-help">${[['manual','매번 승인'],['auto_approve','자동 승인 (Approve for me)'],['full_access','전체 접근 (Full access)']].map(([k,n])=>`<option value="${k}"${(x.access_mode||'manual')===k?' selected':''}>${n}</option>`).join('')}</select><div id="st-access-help" class="hint">
@@ -926,6 +928,52 @@ function renderSettings(){
  <h2>모든 대화에 줄 지침</h2><div class="field"><label class="sr" for="st-sys">지침</label><textarea id="st-sys" name="system_prompt" rows="6">${esc(x.system_prompt||'')}</textarea></div>
  <div class="actions"><button type="submit" class="btn primary">저장</button></div></form>`);
  $('settings-form').addEventListener('submit',async ev=>{ev.preventDefault();const b=Object.fromEntries(new FormData(ev.target));b.max_steps=Number(b.max_steps);b.max_output_tokens=Number(b.max_output_tokens);try{await api('/api/settings',{method:'POST',body:b});await refreshState();toast('설정을 저장했어요');}catch(err){toast(err.message,true);}});
+}
+
+
+// ---------- app updates ----------
+let updateSubscribed=false,updateRevision=0,applyingUpdate=false;
+function updateHTML(){
+ const bridge=window.naruDesktop,state=S.update||{status:bridge?.updateState?'idle':'disabled'},status=state.status;
+ const version=S.data?.version?`<span class="update-version">v${esc(S.data.version)}</span>`:'';
+ const check='<button type="button" class="btn" data-act="update-check">업데이트 확인</button>';
+ let text='',action='';
+ if(status==='disabled')text=state.message||'이 환경에서는 자동 업데이트를 사용할 수 없어요.';
+ else if(status==='checking')text='업데이트 확인 중…';
+ else if(status==='downloading'){const n=Number(state.progress);text=Number.isFinite(n)?`업데이트 다운로드 중 · ${Math.max(0,Math.min(100,Math.round(n)))}%`:'업데이트 다운로드 중…';}
+ else if(status==='ready'){text=state.version?`v${state.version} 업데이트 준비됨`:'업데이트 준비됨';action='<button type="button" class="btn primary" data-act="update-install">다시 시작해 업데이트</button>';}
+ else if(status==='error'){text=state.message||'업데이트를 확인하지 못했어요.';action=check;}
+ else if(status==='up_to_date'){text='최신 버전이에요.';action=check;}
+ else{text='자동으로 업데이트를 확인해요.';action=check;}
+ return `<div class="update-status${status==='error'?' bad':''}">${version}<span>${esc(text)}</span></div>${action}`;
+}
+function applyUpdateState(state){
+ if(!state||!['disabled','idle','checking','downloading','ready','up_to_date','error'].includes(state.status))return;
+ const wasReady=S.update?.status==='ready';S.update=state;updateRevision++;
+ const section=$('update-setting');if(section)section.innerHTML=updateHTML();
+ if(S.data&&wasReady!==(state.status==='ready')){renderSide();renderTop();}
+}
+function initUpdater(){
+ if(updateSubscribed)return;updateSubscribed=true;const bridge=window.naruDesktop;
+ if(!bridge?.updateState){applyUpdateState({status:'disabled'});return;}
+ try{bridge.onUpdateState?.(state=>applyUpdateState(state));}catch{}
+ const revision=updateRevision;
+ Promise.resolve().then(()=>bridge.updateState()).then(state=>{if(revision===updateRevision)applyUpdateState(state);}).catch(()=>{if(revision===updateRevision)applyUpdateState({status:'error',message:'업데이트 상태를 확인하지 못했어요.'});});
+}
+async function checkUpdate(){
+ const bridge=window.naruDesktop;if(!bridge?.checkForUpdates)return;
+ const revision=updateRevision;
+ try{const state=await bridge.checkForUpdates();if(revision===updateRevision&&state)applyUpdateState(state);}
+ catch(err){applyUpdateState({status:'error',message:err.message||'업데이트를 확인하지 못했어요.'});}
+}
+async function installUpdate(){
+ const bridge=window.naruDesktop;if(!bridge?.installUpdate||S.update?.status!=='ready')return;
+ if(S.sending||S.workflowStarting||S.accessSaving||Object.keys(fileReads).length||Object.keys(S.data?.active||{}).length){toast('진행 중인 작업이나 파일 읽기를 마친 뒤 업데이트해 주세요.',true);return;}
+ confirmDialog('Naru를 다시 시작할까요?','저장하지 않은 입력, 첨부와 설정 변경이 사라질 수 있어요.','다시 시작',async()=>{
+  const dlg=$('dialog'),confirm=$('confirm-yes');applyingUpdate=true;const buttons=[...dlg.querySelectorAll('button')];buttons.forEach(b=>{b.disabled=true;});confirm.textContent='업데이트 적용 중…';dlg.setAttribute('aria-busy','true');
+  try{await bridge.installUpdate();}
+  catch(err){applyingUpdate=false;buttons.forEach(b=>{b.disabled=false;});confirm.textContent='다시 시작';dlg.removeAttribute?.('aria-busy');throw err;}
+ });
 }
 
 // ---------- accounts ----------
@@ -1002,6 +1050,9 @@ const ACT={
  'delete-memory':el=>confirmDialog('이 메모리를 지울까요?','앞으로의 대화에 더는 전달되지 않아요.','지우기',async()=>{await api(`/api/memories/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();renderMemory();}),
  'theme':el=>{pref.set('theme',el.dataset.id);applyTheme();document.querySelectorAll('[data-act="theme"]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));},
  'enable-notifications':()=>enableNotifications(),
+ 'update-open':()=>go('settings'),
+ 'update-check':()=>checkUpdate(),
+ 'update-install':()=>installUpdate(),
  'pick-folder':async el=>{const path=await window.naruDesktop?.chooseDirectory?.();if(path)$(el.dataset.id).value=path;},
  'retry-boot':()=>boot(),
 };
@@ -1020,6 +1071,7 @@ document.addEventListener('click',async ev=>{
  }catch(err){if(el.isConnected)el.disabled=false;toast(err.message||'작업을 마치지 못했어요.',true);if(el.dataset.approval)loadDetail().catch(()=>{});}
 });
 document.addEventListener('keydown',ev=>{
+ if(applyingUpdate){ev.preventDefault();return;}
  const mod=ev.metaKey||ev.ctrlKey,k=ev.key.toLowerCase();
  if(ev.key==='Escape'){if(palette){closePalette();return;}if(pop){const anchor=pop.anchor;closePop();anchor?.focus();return;}closeSide();}
  if(!mod)return;
@@ -1032,6 +1084,7 @@ document.addEventListener('keydown',ev=>{
  else if(k==='enter'){const b=document.querySelector('.approve [data-decision="approve"]');if(b&&!b.disabled){ev.preventDefault();b.click();}}
 });
 window.addEventListener('resize',()=>{placePop();});
+$('dialog').addEventListener('cancel',ev=>{if(applyingUpdate)ev.preventDefault();});
 $('dialog').addEventListener('close',()=>{if(lastFocus?.isConnected)lastFocus.focus();});
 $('preview').addEventListener('close',()=>{S.blobs.forEach(u=>URL.revokeObjectURL(u));S.blobs=[];});
 for(const id of ['dialog','preview'])$(id).addEventListener('mousedown',ev=>{if(ev.target===$(id)){const r=$(id).getBoundingClientRect();if(ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom)$(id).close();}});
@@ -1058,6 +1111,7 @@ async function tick(){
 
 // ---------- boot ----------
 async function boot(){
+ initUpdater();
  applyTheme();
  if(window.naruDesktop)document.documentElement.classList.add('desktop');
  $('app').classList.toggle('no-side',S.sideHidden);
@@ -1065,12 +1119,13 @@ async function boot(){
   await refreshState();
   const last=pref.get('session','')||S.data.settings.last_session_id||'';
   if(last&&S.data.sessions.some(s=>s.id===last))await selectSession(last);else renderAll();
+  try{window.naruDesktop?.reportBootReady?.(S.data.version)?.catch?.(()=>{});}catch{}
   if(!S.data.accounts)setTimeout(()=>loadAccounts(),400);setTimeout(()=>discoverModels(),500);
  }catch(err){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,deleteChat,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,deleteChat,S};return;}
 setInterval(tick,280);
 boot();
 })();

@@ -6,6 +6,8 @@
 
 [GitHub Releases](https://github.com/HarryXDhoy/Naru/releases)에서 `Naru-macOS-Apple-Silicon.zip`을 받아 압축을 풀고 Naru.app을 실행하세요. Apple Silicon Mac 전용 빌드입니다. Python 3.10 이상은 따로 설치해야 하며 ChatGPT 계정을 사용하려면 공식 Codex CLI 설치와 로그인이 필요합니다. 로컬 모델은 Ollama 또는 LM Studio를 별도로 실행해야 합니다. 각자의 계정과 키로 연결하며 인증 정보는 배포 파일에 포함되지 않습니다.
 
+설치한 앱은 새 GitHub 릴리스를 자동으로 확인하고 내려받습니다. 업데이트가 준비되면 설정에서 다시 시작해 적용할 수 있으며, 실행 중인 작업이 있을 때는 적용을 기다립니다. GitHub 릴리스의 SHA-256 무결성을 확인하지만 Apple 서명 검증은 제공하지 않습니다.
+
 이 빌드는 Apple 개발자 서명과 공증을 받지 않아 macOS에서 실행을 차단하거나 경고할 수 있습니다. 다른 Mac에서의 동작은 아직 검증하지 않았습니다. Intel Mac과 Windows용 빌드는 제공하지 않습니다.
 
 ## 실행

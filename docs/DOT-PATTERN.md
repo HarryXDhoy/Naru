@@ -16,9 +16,11 @@ The CSS custom properties in `public/styles.css` are the source of truth:
 
 ## Application
 
-- The hero uses a static grid, reduced in the center and stronger toward the edges. The grid sits above the WebGL or CSS fallback background, below the heading and composer, and never captures pointer events.
+- The hero uses the Defined halftone artwork, reduced in the center and stronger toward the edges, with the fine dot grid above it. The artwork drifts slowly over the WebGL or CSS fallback background, below the heading and composer, and never captures pointer events.
 - The sidebar uses the same spacing and radius, fading toward the bottom. Text and controls remain visually foregrounded.
-- Keep conversation text, form inputs, menus and approval panels on solid surfaces for legibility. The halftone artwork drifts slowly, pauses when the window is hidden, and remains still when reduced motion is requested.
+- Keep conversation text, form inputs, menus and approval panels on solid surfaces for legibility. The artwork movement pauses when the window is hidden and remains still when reduced motion is requested.
 - Use the same CSS-pixel spacing on narrow screens. Do not rasterize or stretch a bitmap: the CSS pattern remains sharp on Retina and other displays.
 
-The hero uses the HalftoneField shader from the user’s ego(lite) design-system bundle, with theme-aware output and a pointer lens. `public/defined-halftone.svg` provides the fallback when WebGL is unavailable.
+## Defined theme
+
+The hero uses the HalftoneField shader recovered from the user’s design-system bundle, with theme-aware output and a pointer lens. `public/defined-halftone.svg` provides the fallback when WebGL is unavailable. The fine 7px / .8px dot grid remains a separate overlay. The sidebar uses the standard dot colours (`#152256` at 5.5 % light, `#cfe2ff` at 10 % dark).

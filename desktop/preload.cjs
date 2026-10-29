@@ -10,5 +10,15 @@ contextBridge.exposeInMainWorld('naruDesktop', Object.freeze({
   setTheme: (theme) => ipcRenderer.invoke('naru:set-theme', theme),
   getPreference: (key) => ipcRenderer.sendSync('naru:get-preference', key),
   setPreference: (key, value) => ipcRenderer.sendSync('naru:set-preference', key, value),
-  version: () => ipcRenderer.invoke('naru:version')
+  version: () => ipcRenderer.invoke('naru:version'),
+  updateState: () => ipcRenderer.invoke('naru:update-state'),
+  checkForUpdates: () => ipcRenderer.invoke('naru:update-check'),
+  installUpdate: () => ipcRenderer.invoke('naru:update-install'),
+  reportBootReady: version => ipcRenderer.invoke('naru:update-boot-ready', version),
+  onUpdateState: callback => {
+    if (typeof callback !== 'function') throw new TypeError('callback required');
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('naru:update-state', listener);
+    return () => ipcRenderer.removeListener('naru:update-state', listener);
+  }
 }));

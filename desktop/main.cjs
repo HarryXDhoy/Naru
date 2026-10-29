@@ -5,16 +5,30 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
 const { externalUrl, localPath, openableFile, trustedSender, validPreference } = require('./security.cjs');
+const { createUpdater } = require('./updater.cjs');
 
 app.setName('Naru');
 const lock = app.requestSingleInstanceLock();
-let mainWindow, backend, backendOrigin = '', quitting = false;
+let mainWindow, backend, backendOrigin = '', quitting = false, updater, pythonExecutable;
 const projectRoot = path.resolve(__dirname, '..');
 const dataDir = process.env.NARU_DATA_DIR || path.join(os.homedir(), 'Desktop', 'Naru', 'data');
 const preferencesPath = path.join(dataDir, 'ui-preferences.json');
 let preferences = {};
 const additionalPaths = ['/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin'), '/usr/bin', '/bin'];
 const processPath = [...new Set([...(process.env.PATH || '').split(path.delimiter), ...additionalPaths])].filter(Boolean).join(path.delimiter);
+const markerArg=process.argv.find(x=>x.startsWith('--naru-update-marker='));
+const updateMarker=markerArg?.slice('--naru-update-marker='.length);
+function markUpdate(suffix,content){
+  if(!updateMarker)return;
+  try{
+    const dir=path.dirname(updateMarker),temp=fs.realpathSync(os.tmpdir()),real=fs.realpathSync(dir);
+    if(path.basename(updateMarker)!=='startup-ready'||!path.basename(real).startsWith('naru-update-')||path.dirname(real)!==temp)return;
+    const st=fs.statSync(real);if(st.uid!==process.getuid()||(st.mode&0o077)!==0)return;
+    const fd=fs.openSync(path.join(real,'startup-ready'+suffix),fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_EXCL|fs.constants.O_NOFOLLOW,0o600);
+    try{fs.writeFileSync(fd,content);}finally{fs.closeSync(fd);}
+  }catch{}
+}
+markUpdate('.pid',String(process.pid));
 
 if (!lock) app.quit();
 else {
@@ -37,7 +51,7 @@ async function startBackend() {
   const workspace = process.env.NARU_WORKSPACE || path.join(os.homedir(), 'Desktop', 'Naru', 'workspace');
   fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(workspace, { recursive: true });
-  const python = findPython();
+  const python = findPython();pythonExecutable=python;
   return new Promise((resolve, reject) => {
     let stdout = '', stderr = '', settled = false;
     const timeout = setTimeout(() => { if (!settled) { settled = true; backend?.kill('SIGTERM'); reject(new Error('로컬 서버를 시작하지 못했습니다. 다시 실행해 주세요.')); } }, 25000);
@@ -46,6 +60,7 @@ async function startBackend() {
       env: { ...process.env, PATH: processPath, PYTHONUNBUFFERED: '1', PYTHONDONTWRITEBYTECODE: '1' },
       stdio: ['ignore', 'pipe', 'pipe']
     });
+    if(backend.pid)markUpdate('.backend',String(backend.pid));
     backend.stdout.setEncoding('utf8'); backend.stderr.setEncoding('utf8');
     backend.stdout.on('data', chunk => {
       stdout = (stdout + chunk).slice(-10000);
@@ -128,6 +143,16 @@ function installBridge() {
   });
   ipcMain.handle('naru:open-external', async (event, value) => { requireTrusted(event); await shell.openExternal(externalUrl(value)); return true; });
   ipcMain.handle('naru:version', event => { requireTrusted(event); return app.getVersion(); });
+  ipcMain.handle('naru:update-state', event => { requireTrusted(event); return updater.state(); });
+  ipcMain.handle('naru:update-check', event => { requireTrusted(event); return updater.check(); });
+  ipcMain.handle('naru:update-install', event => { requireTrusted(event); return updater.install(); });
+  ipcMain.handle('naru:update-boot-ready', async (event,version) => {
+    requireTrusted(event);
+    if(!updateMarker||version!==app.getVersion())return false;
+    const health=await updater.health();
+    if(health.ok!==true||health.version!==version)return false;
+    markUpdate('','ready');return true;
+  });
 }
 
 function createWindow() {
@@ -174,6 +199,8 @@ async function start() {
     callback({ responseHeaders: headers });
   });
   installBridge();
+  updater=createUpdater({app,python:pythonExecutable,backendOrigin,dataDir,onState:value=>{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('naru:update-state',value);}});
+  if(updater.enabled){if(!updater.recovered)setTimeout(()=>updater.check(),8000);setInterval(()=>updater.check(),6*60*60*1000);}
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Naru', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: '편집', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
@@ -194,3 +221,4 @@ function fatal(error) {
 app.on('activate', () => { if (!mainWindow && backendOrigin && !quitting) createWindow(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('before-quit', () => { quitting = true; backend?.kill('SIGTERM'); });
+process.on('SIGTERM', () => { quitting=true;backend?.kill('SIGTERM');app.quit(); });

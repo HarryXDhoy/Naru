@@ -12,7 +12,7 @@
   --shadow-2:0 0 0 1px #ffffff33;--shadow-2-2:0 0 0 1px #ffffff33;--shadow-3:0 0 0 1px #ffffff33,0 18px 50px #000b;
   --radius-4:2px;--radius-6:2px;--radius-8:2px;--radius-10:2px;--radius-12:2px;--radius-14:2px;--radius-16:2px;--radius-20:2px;--radius-24:2px;
   --font-sans:Inter,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
-  --dot-side-color:#fff;--dot-side-opacity:.035;
+  --dot-side-color:#cfe2ff;--dot-side-opacity:.10;
 }
 /* The bright variant retains the same typography and hairline layout. */
 :root[data-theme="light"] {
@@ -28,7 +28,7 @@
   --shadow-2:0 0 0 1px #0003;--shadow-2-2:0 0 0 1px #0003;--shadow-3:0 0 0 1px #0003,0 18px 50px #0003;
   --radius-4:2px;--radius-6:2px;--radius-8:2px;--radius-10:2px;--radius-12:2px;--radius-14:2px;--radius-16:2px;--radius-20:2px;--radius-24:2px;
   --font-sans:Inter,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
-  --dot-side-color:#111;--dot-side-opacity:.035;
+  --dot-side-color:#152256;--dot-side-opacity:.055;
 }
 /* Honor system mode as well as explicit brightness choices. */
 @media (prefers-color-scheme:light) {
@@ -41,7 +41,7 @@
   --page-bg:#eee;--bg-window:#f7f7f7ed;--bg-window-inner:#f2f2f2;--bg-overlay:#00000099;--glass-1:#ffffff26;
   --badge-run-bg:#e5f1ff;--badge-run-fg:#144479;--badge-done-bg:#dff3e4;--badge-done-fg:#155b29;--badge-att-bg:#fff2cd;--badge-att-fg:#755308;--badge-err-bg:#ffe7e3;--badge-err-fg:#a1201b;
   --shadow-0:0 0 0 .5px #0003;--shadow-1:0 0 0 1px #0003;--shadow-1-1:0 0 0 1px #0006;--shadow-2:0 0 0 1px #0003;--shadow-2-2:0 0 0 1px #0003;--shadow-3:0 0 0 1px #0003,0 18px 50px #0003;
-  --dot-side-color:#111;--dot-side-opacity:.035;
+  --dot-side-color:#152256;--dot-side-opacity:.055;
  }
 }
 body{letter-spacing:0}
@@ -65,7 +65,24 @@ body{letter-spacing:0}
 .u .bubble{border:1px solid var(--bg-alpha-3)}
 .hero{background:#000}
 .hero canvas{opacity:.13;mix-blend-mode:screen}
-.hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:url('/defined-halftone.svg') center/cover no-repeat;opacity:.9;mask-image:radial-gradient(ellipse 48% 48% at 50% 43%,#0006 0%,#000d 65%,#000 100%);-webkit-mask-image:radial-gradient(ellipse 48% 48% at 50% 43%,#0006 0%,#000d 65%,#000 100%)}
+/* Defined halftone on the shared Naru dot grid: colour fields seen only through the 7px dots, faint in the centre, strongest at the edges. */
+:root{--fluid-ultramarine:#1f3dff;--fluid-cyan:#29c8ff;--fluid-lime:#b8f53a;--fluid-amber:#ffa41f;--fluid-magenta:#ff3fd2}
+.hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+ background:
+  radial-gradient(34% 44% at 4% 24%,var(--fluid-magenta) 0 22%,transparent 70%),
+  radial-gradient(29% 34% at 28% 6%,var(--fluid-lime) 0 22%,transparent 70%),
+  radial-gradient(39% 44% at 66% 12%,var(--fluid-ultramarine) 0 22%,transparent 72%),
+  radial-gradient(26% 34% at 76% 24%,var(--fluid-cyan) 0 22%,transparent 70%),
+  radial-gradient(29% 39% at 100% 8%,var(--fluid-magenta) 0 22%,transparent 70%),
+  radial-gradient(39% 44% at 94% 88%,var(--fluid-ultramarine) 0 22%,transparent 72%),
+  radial-gradient(26% 31% at 82% 70%,var(--fluid-cyan) 0 22%,transparent 70%),
+  radial-gradient(34% 36% at 10% 86%,var(--fluid-amber) 0 22%,transparent 70%),
+  radial-gradient(26% 31% at 32% 96%,var(--fluid-magenta) 0 22%,transparent 70%);
+ -webkit-mask-image:radial-gradient(circle,#000 var(--dot-radius),transparent calc(var(--dot-radius) + .35px)),radial-gradient(ellipse 56% 54% at 50% 45%,#0000 0%,#0006 45%,#000 100%);
+ mask-image:radial-gradient(circle,#000 var(--dot-radius),transparent calc(var(--dot-radius) + .35px)),radial-gradient(ellipse 56% 54% at 50% 45%,#0000 0%,#0006 45%,#000 100%);
+ -webkit-mask-size:var(--dot-grid) var(--dot-grid),100% 100%;mask-size:var(--dot-grid) var(--dot-grid),100% 100%;
+ -webkit-mask-repeat:repeat,no-repeat;mask-repeat:repeat,no-repeat;
+ -webkit-mask-composite:source-in;mask-composite:intersect}
 .hero::after{z-index:2;opacity:.12}
 .hero-title{z-index:3;color:#fff;font-size:clamp(30px,4vw,48px);font-weight:600;letter-spacing:-.035em;text-shadow:0 2px 18px #000}
 .sheet:has(.chat.empty) .top .icon-btn{color:#fff}
@@ -84,6 +101,5 @@ body{letter-spacing:0}
 ::-webkit-scrollbar-thumb{background:var(--bg-6);border:3px solid transparent;background-clip:padding-box}
 @media (max-width:760px){
  .sheet,.app.no-side .sheet{border-radius:0}
- .hero::before{background-position:center;background-size:auto 100%}
  .page-in{padding-left:20px;padding-right:20px}
 }
