@@ -213,7 +213,7 @@ function renderSide(){
  $('side').innerHTML=`<div class="side-top">${WORDMARK}<span class="grow"></span>${iconBtn('sidebar','사이드바 숨기기 (⌘\\)','toggle-side')}</div>
  <button type="button" class="side-item strong" data-act="new" title="새 대화 (⌘N)">${icon('compose')}<span>새 대화</span></button>
  <button type="button" class="side-item" data-act="palette" title="검색 (⌘K)">${icon('search')}<span>검색</span></button>
- <nav class="sessions" aria-label="최근 대화">${d.sessions.map(s=>{const st=active[s.id];return `<button type="button" class="side-item" data-session="${esc(s.id)}" title="${esc(s.title)}"${S.view==='chat'&&S.sid===s.id?' aria-current="page"':''}><span>${esc(s.title||'새 대화')}</span>${st?`<i class="dot ${st==='awaiting_approval'?'att':''}" role="img" aria-label="${st==='awaiting_approval'?'확인 필요':'실행 중'}"></i>`:''}</button>`;}).join('')}</nav>
+ <nav class="sessions" aria-label="최근 대화">${d.sessions.map(s=>{const st=active[s.id],title=s.title||'새 대화';return `<div class="session-row"><button type="button" class="side-item" data-session="${esc(s.id)}" title="${esc(title)}"${S.view==='chat'&&S.sid===s.id?' aria-current="page"':''}><span>${esc(title)}</span>${st?`<i class="dot ${st==='awaiting_approval'?'att':''}" role="img" aria-label="${st==='awaiting_approval'?'확인 필요':'실행 중'}"></i>`:''}</button><button type="button" class="icon-btn session-delete" data-act="delete-chat" data-id="${esc(s.id)}" title="대화 삭제" aria-label="${esc(title)} 대화 삭제">${icon('trash')}</button></div>`;}).join('')}</nav>
  <nav class="side-nav" aria-label="관리">${nav.map(([v,ic,t])=>`<button type="button" class="side-item" data-view="${v}"${S.view===v?' aria-current="page"':''}>${icon(ic)}<span>${t}</span></button>`).join('')}</nav>`;
 }
 function renderTop(){
@@ -440,8 +440,10 @@ function ensureProvider(){
  const ready=providers().find(p=>p.kind==='codex'&&a.codex?.authenticated)||providers().find(p=>isAccount(p)&&accountOf(p)?.authenticated&&!accountOf(p)?.execution_blocked)||providers().find(p=>p.model&&!accountOf(p)?.execution_blocked)||providers().find(p=>!accountOf(p)?.execution_blocked);
  S.providerId=ready?.id||'';S.model=ready?.model||'';
 }
+const deletedSessionIds=new Set();
 async function refreshState(timeout){
  const d=await api('/api/state',{timeout});
+ if(d.sessions)d.sessions=d.sessions.filter(s=>!deletedSessionIds.has(String(s.id)));
  S.data=d;if(d.accounts)S.accounts=d.accounts;
  ensureProvider();
  S.skillIds=S.skillIds.filter(id=>enabledSkills().some(s=>String(s.id)===id));
@@ -631,9 +633,21 @@ function chatMenu(anchor){
  openPop(anchor,`<button type="button" class="opt" data-pick="rename">${icon('edit')}<span>이름 바꾸기</span></button><button type="button" class="opt" data-pick="export">${icon('download')}<span>마크다운으로 내보내기</span></button><div class="sep"></div><button type="button" class="opt" data-pick="delete" style="color:var(--danger)">${icon('trash')}<span>대화 삭제</span></button>`,{width:220,onPick:k=>{closePop();if(k==='rename')startRename();else if(k==='export')exportChat();else deleteChat();}});
 }
 function exportChat(){const a=document.createElement('a');a.href=`/api/sessions/${enc(S.sid)}/export`;a.download='';document.body.appendChild(a);a.click();a.remove();}
-function deleteChat(){
- if(runActive()){toast('실행을 멈춘 뒤 삭제할 수 있어요.',true);return;}
- confirmDialog('이 대화를 삭제할까요?','대화와 실행 기록이 사라져요. 만든 파일은 작업 폴더에 남아요.','삭제',async()=>{await api(`/api/sessions/${enc(S.sid)}`,{method:'DELETE'});await refreshState();newChat();toast('삭제했어요');});
+function deleteChat(id=S.sid){
+ const session=S.data?.sessions?.find(s=>String(s.id)===String(id))||(S.sid===id?S.detail?.session:null);if(!id||!session)return;
+ if(S.data?.active?.[id]||(S.sid===id&&runActive())){toast('실행을 멈춘 뒤 삭제할 수 있어요.',true);return;}
+ const title=session.title||'새 대화';
+ confirmDialog(`“${title}” 대화를 삭제할까요?`,'대화, 실행 기록과 대기 메시지가 삭제돼요. 만든 파일은 그대로 남아요.','삭제',async()=>{
+  await api(`/api/sessions/${enc(id)}`,{method:'DELETE'});
+  deletedSessionIds.add(String(id));
+  delete S.drafts[id];delete S.files[id];delete accessValues[id];delete accessVersions[id];
+  if(S.data?.sessions)S.data.sessions=S.data.sessions.filter(s=>String(s.id)!==String(id));
+  if(S.data?.active)delete S.data.active[id];
+  if(S.sid===id){if(S.view==='chat')newChat();else{S.epoch++;S.sid=null;S.detail=null;S.live='';remember(null);renderSide();renderTop();}}
+  else renderSide();
+  try{await refreshState();renderSide();}catch{}
+  toast('삭제했어요');
+ });
 }
 function startRename(){
  const btn=$('top-title');if(!btn||!S.detail)return;const old=S.detail.session.title;
@@ -908,6 +922,7 @@ const ACT={
  'close-side':()=>closeSide(),
  'drawer':()=>{S.drawer=!S.drawer;pref.set('drawer',S.drawer?'1':'0');$('drawer')?.classList.toggle('open',S.drawer);renderTop();},
  'chat-menu':el=>chatMenu(el),
+ 'delete-chat':el=>deleteChat(el.dataset.id),
  'rename':()=>startRename(),
  'attach':()=>$('file-input')?.click(),
  'remove-file':el=>{const key=draftKey();S.files[key]=attachments().filter((_,i)=>i!==+el.dataset.id);renderChips();},
@@ -1024,7 +1039,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,addFiles,wireComposer,renderChips,messageHTML,imageSource,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,imageSource,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,deleteChat,S};return;}
 setInterval(tick,280);
 boot();
 })();

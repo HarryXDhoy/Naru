@@ -119,6 +119,10 @@ svg{display:block;flex:none}
 .side-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .side-item.strong{font-weight:500}
 .sessions{flex:1;overflow-y:auto;margin:10px -4px 8px 0;padding:0 4px 0 0;display:flex;flex-direction:column;gap:1px}
+.session-row{display:flex;align-items:center;min-width:0}
+.session-row .side-item{min-width:0;flex:1}
+.session-delete{flex:none;opacity:.55}
+.session-delete:hover,.session-delete:focus-visible{opacity:1;color:var(--danger)}
 .dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--accent);animation:pulse 1s cubic-bezier(.42,0,.58,1) infinite alternate}
 .dot.att{background:var(--yellow-6);animation:none}
 .side-nav{display:flex;flex-direction:column;gap:1px;padding-top:8px;box-shadow:0 -1px 0 var(--bg-alpha-3)}
