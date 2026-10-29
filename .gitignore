@@ -1,0 +1,24 @@
+node_modules/
+dist/
+data/
+workspace/*
+!workspace/.gitkeep
+__pycache__/
+*.pyc
+.DS_Store
+.env
+*.log
+
+
+# Local data, development archives, and screenshots stay on this Mac.
+.dev-data/
+_incoming/
+_backup-*/
+docs/qa-*.png
+*.sqlite*
+*.db
+*.db-wal
+*.db-shm
+.env.*
+!.env.example
+desktop/icon.iconset/

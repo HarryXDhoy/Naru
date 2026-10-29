@@ -1,0 +1,19 @@
+{
+  "name": "naru-harness",
+  "productName": "Naru",
+  "version": "0.2.0",
+  "description": "A personal desktop AI workspace with local and cloud model connections",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "web": "python3 server/app.py --port 4317",
+    "test": "python3 -m unittest discover -s tests -v && node --test desktop/security.test.cjs && node tests/ui-interactions.cjs && node tests/model-discovery.cjs",
+    "package": "node scripts/package.cjs",
+    "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --test desktop/security.test.cjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "20.3.0",
+    "electron": "45.1.0"
+  }
+}

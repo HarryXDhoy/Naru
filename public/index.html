@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Naru</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<div id="app" class="app">
+  <aside id="side" class="side" aria-label="대화 목록"></aside>
+  <div class="scrim" data-act="close-side"></div>
+  <section class="sheet" id="sheet">
+    <header id="top" class="top"></header>
+    <main id="main" class="body" tabindex="-1"><div class="boot"></div></main>
+  </section>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<dialog id="dialog"></dialog>
+<dialog id="preview" class="wide"></dialog>
+<script src="/app.js" defer></script>
+</body>
+</html>

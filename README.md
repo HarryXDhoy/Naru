@@ -1,0 +1,108 @@
+# Naru
+
+개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정 로그인과 로컬·클라우드 모델 서버를 함께 연결합니다. 화면은 ego(lite) Style 디자인 시스템을 따릅니다.
+
+## 실행
+
+데스크탑 `Naru` 폴더에서 **`Launch Naru.command`**를 더블클릭하거나 **`dist/Naru-darwin-arm64/Naru.app`**을 여세요. GitHub에서 새로 받은 경우 빌드된 앱과 의존성은 포함되지 않으므로 먼저 아래 개발 실행 명령을 따르세요.
+
+Python 3.10 이상과 표준 라이브러리 `sqlite3`를 사용합니다. Homebrew Python을 먼저 찾고, `/usr/local/bin/python3`, `/usr/bin/python3`, PATH 순서로 확인합니다. Python은 앱에 포함하지 않았습니다.
+
+개발 실행:
+
+```sh
+npm ci
+npm start          # Electron 앱
+npm run web        # 브라우저용: http://127.0.0.1:4317
+```
+
+## 계정으로 연결
+
+**모델** 화면의 *계정으로 연결*에서 로그인합니다. Naru는 토큰이나 인증 파일을 읽지 않고, 각 회사의 공식 CLI 또는 공식 OAuth에 로그인을 맡깁니다.
+
+| 계정 | 방식 | 필요한 것 |
+| --- | --- | --- |
+| ChatGPT | 공식 Codex CLI 로그인 | `npm install -g @openai/codex` |
+| Claude | 공식 Claude Code CLI 로그인 (Pro·Max 구독) | `npm install -g @anthropic-ai/claude-code` |
+| Gemini | 공식 Gemini CLI의 Google 로그인 | `npm install -g @google/gemini-cli` |
+| GitHub Copilot | 공식 Copilot CLI 로그인 | `npm install -g @github/copilot` |
+| OpenRouter | OAuth PKCE. 발급된 키는 macOS 키체인에 저장 | 없음 |
+
+- CLI가 없으면 *설치 명령 복사* 버튼이 나옵니다. 로그인 버튼은 터미널이나 브라우저에서 공식 로그인을 시작하고, 끝나면 Naru가 자동으로 확인합니다.
+- 계정 연결의 대화 모드는 CLI의 도구·MCP·세션 저장을 끄고 답만 받습니다. 에이전트 모드에서 CLI는 도구 *계획*만 내고, 파일 쓰기·수정·명령은 Naru의 승인 흐름을 거쳐 Naru가 실행합니다.
+- Claude Code가 `ANTHROPIC_API_KEY`를 보고 있으면 구독 대신 API 과금이 될 수 있어, Naru는 이 변수를 CLI에 넘기지 않습니다.
+- 사용할 수 있는 모델과 사용량 한도는 각 계정의 요금제를 따릅니다.
+- Kimi Code는 비대화형 실행이 도구를 승인 없이 실행하는 구조라 계정 연결에 넣지 않았습니다. API 키로는 OpenAI 호환 연결에서 쓸 수 있습니다.
+
+## API와 로컬 서버
+
+| 형식 | 연결할 수 있는 서버 |
+| --- | --- |
+| OpenAI Responses | Responses API를 제공하는 서버 |
+| OpenAI 호환 Chat Completions | OpenAI 호환 API, LM Studio, vLLM, OpenRouter 키 등 |
+| Ollama | Ollama `/api/chat` |
+| Anthropic | Claude Messages API |
+| Gemini | Gemini GenerateContent API |
+
+로컬 기본 주소는 Ollama `http://127.0.0.1:11434`, LM Studio `http://127.0.0.1:1234/v1`입니다. 로컬 서버와 모델은 사용자가 따로 실행해야 합니다. 도구 호출을 지원하지 않는 모델은 연결 편집에서 *에이전트 도구 쓰기*를 끄세요.
+
+## 작업 방식
+
+- **대화**: 파일이나 명령을 건드리지 않습니다.
+- 모델 선택 메뉴는 지원되는 API 서버와 Codex에서 모델 목록을 자동으로 불러옵니다. Claude·Gemini·Copilot CLI는 자동 계정별 목록 대신 기본 모델 목록 또는 직접 입력을 사용합니다. 새로고침으로 다시 탐색할 수 있고, 연결되지 않은 로컬 서버는 상태를 표시합니다. ChatGPT 목록은 Codex 카탈로그이며 계정의 실제 모델 사용 권한은 요청 결과로 확인됩니다.
+- 에이전트는 작업 목록을 기록하고, 이전 대화는 매번 승인받은 후 제한된 발췌만 검색할 수 있습니다. 승인한 발췌는 현재 모델 제공자에게 전달됩니다.
+- **에이전트**: 작업 폴더 안에서 `list_files`, `read_file`, `search_files`, `write_file`, `edit_file`, `run_command`, 웹 읽기·검색을 씁니다. 쓰기·수정·명령은 실행 전에 내용(수정은 줄 단위 비교)을 보여 주고 허용을 받습니다. *모두 허용*은 그 작업 안의 같은 종류만 다시 묻지 않습니다.
+- 답 다시 받기, 실행 중지(⌘.), 끊긴 작업 이어서 실행, 대화 이름 바꾸기·삭제·마크다운 내보내기를 지원합니다.
+- 만든 파일은 오른쪽 패널(⌘J)에 모이고 미리보기, Finder에서 보기, 기본 앱으로 열기를 할 수 있습니다. 실행 파일 형식은 기본 앱으로 열지 않습니다.
+- ⌘K로 대화 제목과 본문까지 검색합니다. 텍스트 파일을 끌어다 놓아 첨부할 수 있습니다.
+- 앱이 뒤에 있을 때 승인 요청과 작업 완료를 macOS 알림으로 알려 줍니다.
+
+## 데이터
+
+```text
+~/Desktop/Naru/                              프로젝트 전체
+~/Desktop/Naru/workspace/                    기본 에이전트 작업 폴더
+~/Desktop/Naru/data/                         대화·실행 기록 (SQLite)
+~/OneDrive/Business/Reading & Reports/       보고서 기본 위치
+```
+
+- API 키와 OpenRouter 키는 macOS 키체인에만 저장하며 데이터베이스나 화면 응답에 넣지 않습니다.
+- 작업 폴더와 보고서 경로는 설정에서 바꿀 수 있습니다. `NARU_PYTHON`, `NARU_DATA_DIR`, `NARU_WORKSPACE` 환경 변수가 데스크톱 기본값을 덮어씁니다.
+- 승인된 터미널 명령은 작업 폴더에서 현재 macOS 사용자 권한으로 실행됩니다. Naru의 명령 도구는 OS 샌드박스가 아닙니다.
+- 백업은 앱을 끈 뒤 `data/`와 작업 폴더를 함께 복사하세요.
+
+## 개발·검증
+
+```sh
+npm test                  # Python 테스트 + 데스크톱 보안 테스트 + UI 렌더링 검사
+npm run check:desktop     # Electron 구문과 IPC·URL·파일 열기 경계 검사
+npm run package           # dist/Naru-darwin-arm64/Naru.app 빌드
+python3 scripts/make-icon.py   # 앱 아이콘 다시 그리기 (numpy, Pillow 필요)
+```
+
+Electron 45.1.0, Python 표준 라이브러리, 번들한 Mona Sans 글꼴(SIL OFL, `public/fonts/OFL.txt`)을 씁니다. 렌더러에는 Node.js 권한이 없고, 서버는 `127.0.0.1`에만 열립니다. 개인용 개발 빌드이며 Apple 공증은 받지 않았습니다.
+
+## 구성
+
+```text
+server/      로컬 API, SQLite, 도구 실행, 모델 어댑터(providers.py), 계정 CLI 연결(accounts.py)
+public/      데스크톱 UI (ego(lite) 토큰, HeroHorizon WebGL 첫 화면)
+desktop/     Electron 실행부, 제한된 IPC, 앱 아이콘
+scripts/     패키징과 아이콘 생성
+tests/       기능·안전·UI 검증
+docs/        API 계약과 검증 기록
+```
+
+## 참고 문서
+
+- [Codex 로그인](https://learn.chatgpt.com/docs/auth)
+- [Claude Code 헤드리스 실행](https://docs.claude.com/en/docs/claude-code/headless)
+- [Gemini CLI 인증](https://github.com/google-gemini/gemini-cli/blob/main/docs/get-started/authentication.md)
+- [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/use-copilot-cli)
+- [OpenRouter OAuth PKCE](https://openrouter.ai/docs/use-cases/oauth-pkce)
+- [Ollama Chat API](https://docs.ollama.com/api/chat)
+- [Electron 보안](https://www.electronjs.org/docs/latest/tutorial/security)
+
+## Hermes 기능 현황
+
+[Hermes 기능 비교와 미지원 항목](docs/HERMES-COMPATIBILITY.md)을 참조하세요. Hermes 전체 기능은 아직 Naru에 통합되지 않았습니다.

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Vector stand-in for desktop/icon.png (rendered by scripts/make-icon.py): the HeroHorizon planet rim. -->
+  <defs>
+    <clipPath id="sq"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#152256"/><stop offset=".3" stop-color="#204493"/><stop offset=".55" stop-color="#0880f7"/></linearGradient>
+    <radialGradient id="ground" cx="512" cy="1712" r="1000" gradientUnits="userSpaceOnUse"><stop offset=".72" stop-color="#f7faff"/><stop offset=".92" stop-color="#a7cbff"/><stop offset="1" stop-color="#0880f7"/></radialGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+  <g clip-path="url(#sq)">
+    <rect width="1024" height="1024" fill="url(#sky)"/>
+    <circle cx="512" cy="1712" r="1000" fill="url(#ground)"/>
+    <circle cx="512" cy="1712" r="1000" fill="none" stroke="#bfe9ff" stroke-width="26" filter="url(#glow)"/>
+    <circle cx="512" cy="1712" r="1000" fill="none" stroke="#ffffff" stroke-width="7"/>
+  </g>
+</svg>
