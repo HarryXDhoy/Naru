@@ -1,6 +1,6 @@
 # Naru
 
-개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정 로그인과 로컬·클라우드 모델 서버를 함께 연결합니다. 화면은 ego(lite) Style 디자인 시스템을 따릅니다.
+개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정 로그인과 로컬·클라우드 모델 서버를 함께 연결합니다. 화면은 ego(lite) Style 디자인 시스템을 따르며, [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
 
 ## 실행
 

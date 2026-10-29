@@ -27,6 +27,9 @@
   --ease-standard:cubic-bezier(.34,.69,.1,1);--ease-smooth:cubic-bezier(.32,.87,.26,1);--ease-snappy-2:cubic-bezier(.37,1.09,.31,1);
   --font-sans:"Mona Sans",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Noto Sans CJK KR",system-ui,sans-serif;
   --font-mono:"SF Mono",ui-monospace,Menlo,"JetBrains Mono","Noto Sans Mono",monospace;
+  /* Dotted texture tokens — see docs/DOT-PATTERN.md. */
+  --dot-grid:7px;--dot-radius:.8px;--dot-hero-color:#ffffffb3;
+  --dot-side-color:#152256;--dot-side-opacity:.055;
   --side-w:260px;
   color-scheme:light;
 }
@@ -37,6 +40,7 @@
   --text-0:#ffffff;--text-1:#ffffffe6;--text-2:#ffffffb3;--text-3:#ffffff7a;--text-4:#ffffff3d;--text-5:#ffffff29;
   --accent:var(--blue-4);--accent-bg:var(--blue-10);--accent-light:var(--blue-9);--accent-dark:var(--blue-2);
   --danger:var(--red-4);--danger-bg:var(--red-10);--heading:var(--blue-2);
+  --dot-side-color:#cfe2ff;--dot-side-opacity:.10;
   --page-bg:#0f0f0f;--bg-window:#1a1a1abf;--bg-window-inner:#1a1a1ab3;--bg-overlay:#000000b3;--glass-1:#ffffff0f;
   --badge-run-bg:var(--blue-10);--badge-run-fg:var(--blue-2);--badge-done-bg:var(--green-10);--badge-done-fg:var(--green-2);--badge-att-bg:var(--yellow-10);--badge-att-fg:var(--yellow-2);--badge-err-bg:var(--red-10);--badge-err-fg:var(--red-2);
   --shadow-0:0 0 0 .5px #ffffff14;--shadow-1:0 0 0 1px #ffffff0f;--shadow-1-1:0 0 0 1px #ffffff1a;
@@ -52,6 +56,7 @@
   --text-0:#ffffff;--text-1:#ffffffe6;--text-2:#ffffffb3;--text-3:#ffffff7a;--text-4:#ffffff3d;--text-5:#ffffff29;
   --accent:var(--blue-4);--accent-bg:var(--blue-10);--accent-light:var(--blue-9);--accent-dark:var(--blue-2);
   --danger:var(--red-4);--danger-bg:var(--red-10);--heading:var(--blue-2);
+  --dot-side-color:#cfe2ff;--dot-side-opacity:.10;
   --page-bg:#0f0f0f;--bg-window:#1a1a1abf;--bg-window-inner:#1a1a1ab3;--bg-overlay:#000000b3;--glass-1:#ffffff0f;
   --badge-run-bg:var(--blue-10);--badge-run-fg:var(--blue-2);--badge-done-bg:var(--green-10);--badge-done-fg:var(--green-2);--badge-att-bg:var(--yellow-10);--badge-att-fg:var(--yellow-2);--badge-err-bg:var(--red-10);--badge-err-fg:var(--red-2);
   --shadow-0:0 0 0 .5px #ffffff14;--shadow-1:0 0 0 1px #ffffff0f;--shadow-1-1:0 0 0 1px #ffffff1a;
@@ -86,7 +91,9 @@ svg{display:block;flex:none}
 .app{display:grid;grid-template-columns:var(--side-w) minmax(0,1fr);height:100vh;transition:grid-template-columns .25s var(--ease-smooth)}
 .app.no-side{grid-template-columns:0 minmax(0,1fr)}
 .app.no-side .side{visibility:hidden}
-.side{display:flex;flex-direction:column;min-width:0;padding:8px 8px 10px 10px;overflow:hidden}
+.side{display:flex;flex-direction:column;min-width:0;padding:8px 8px 10px 10px;overflow:hidden;position:relative;isolation:isolate}
+/* Texture stays behind content and never intercepts controls. */
+.side::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(circle,var(--dot-side-color) var(--dot-radius),transparent calc(var(--dot-radius) + .35px));background-size:var(--dot-grid) var(--dot-grid);opacity:var(--dot-side-opacity);mask-image:linear-gradient(to bottom,#000,transparent 72%);-webkit-mask-image:linear-gradient(to bottom,#000,transparent 72%)}
 .sheet{margin:8px 8px 8px 0;background:var(--bg-1);border-radius:var(--radius-14);box-shadow:var(--shadow-1),0 1px 3px #0000000a;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;position:relative}
 .app.no-side .sheet{margin-left:8px}
 .desktop .side-top{padding-top:30px;-webkit-app-region:drag}
@@ -147,7 +154,9 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 /* HeroHorizon empty state */
 .hero{position:absolute;inset:0;z-index:0;overflow:hidden;background:radial-gradient(130% 100% at 50% 135%,var(--bg-1) 48%,var(--blue-2) 58%,var(--blue-5) 64%,var(--blue-8) 76%,var(--blue-10) 100%)}
 .hero canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.hero-title{position:absolute;z-index:1;left:24px;right:24px;top:27%;margin:0;text-align:center;font:600 28px/.95 var(--font-sans);color:var(--blue-1);text-wrap:balance;letter-spacing:normal}
+/* Fine, static dots over the hero; softened through the center for readable copy. */
+.hero::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background-image:radial-gradient(circle,var(--dot-hero-color) var(--dot-radius),transparent calc(var(--dot-radius) + .35px));background-size:var(--dot-grid) var(--dot-grid);opacity:.34;mask-image:radial-gradient(ellipse 80% 72% at 50% 48%,#0004 0%,#0008 55%,#000 100%);-webkit-mask-image:radial-gradient(ellipse 80% 72% at 50% 48%,#0004 0%,#0008 55%,#000 100%)}
+.hero-title{position:absolute;z-index:2;left:24px;right:24px;top:27%;margin:0;text-align:center;font:600 28px/.95 var(--font-sans);color:var(--blue-1);text-wrap:balance;letter-spacing:normal}
 .chat.empty .hero{top:-48px}
 .chat.empty .thread{display:none}
 .chat.empty .dock{position:absolute;left:0;right:0;top:52%;padding:0 24px}

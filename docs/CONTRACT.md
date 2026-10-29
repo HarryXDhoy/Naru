@@ -54,3 +54,5 @@ platform, chooseDirectory(), revealPath(path), openPath(path), openExternal(url)
 
 ## Interface
 ego(lite) Style tokens (grey surfaces, black-alpha text, hairline rings, pill controls, navy→blue-5 primary), Mona Sans bundled locally, Korean-first copy, one HeroHorizon WebGL2 scene on the empty chat screen with a CSS fallback and reduced-motion still frame. Status uses badges (실행 중, 확인 필요, 연결됨, 로그인 필요, 설치 필요). No decorative captions, eyebrows or keyboard hints in the layout; shortcuts live in tooltips.
+
+Dotted texture tokens and usage rules: [DOT-PATTERN.md](DOT-PATTERN.md).
