@@ -215,7 +215,7 @@ function renderMain(){if(S.view!=='chat')stopHero();if(S.view==='chat')renderCha
 // ---------- chat ----------
 function renderChat(){
  stopHero();
- $('main').innerHTML=`<div class="chat" id="chat"><div class="hero" id="hero" hidden><h1 class="hero-title">무엇을 할까요?</h1></div><div class="thread" id="thread"><div class="col" id="col"></div></div><div class="dock"><form class="composer" id="composer" autocomplete="off"><div class="files-row" id="file-chips" hidden></div><label class="sr" for="input">메시지</label><textarea id="input" rows="1" placeholder="메시지 입력" spellcheck="false"></textarea><div class="tools" id="tools"></div><input type="file" id="file-input" multiple hidden></form></div></div><aside class="drawer ${S.drawer&&S.detail?'open':''}" id="drawer" aria-label="파일과 실행 정보"><div class="drawer-in" id="drawer-in"></div></aside>`;
+ $('main').innerHTML=`<div class="chat" id="chat"><div class="hero" id="hero" hidden><div class="hero-pattern" aria-hidden="true"><span></span></div><h1 class="hero-title">무엇을 할까요?</h1></div><div class="thread" id="thread"><div class="col" id="col"></div></div><div class="dock"><form class="composer" id="composer" autocomplete="off"><div class="files-row" id="file-chips" hidden></div><label class="sr" for="input">메시지</label><textarea id="input" rows="1" placeholder="메시지 입력" spellcheck="false"></textarea><div class="tools" id="tools"></div><input type="file" id="file-input" multiple hidden></form></div></div><aside class="drawer ${S.drawer&&S.detail?'open':''}" id="drawer" aria-label="파일과 실행 정보"><div class="drawer-in" id="drawer-in"></div></aside>`;
  const input=$('input');input.value=S.drafts[draftKey()]||'';autosize();
  wireComposer();renderTools();renderChips();renderThread(true);renderDrawer();
 }
@@ -236,7 +236,7 @@ function renderTools(){
  const el=$('tools');if(!el)return;const active=runActive(),sk=selectedSkills();
  el.innerHTML=`${iconBtn('clip','파일 첨부','attach')}
  <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="menu" title="모델 바꾸기"${active?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
- <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 바꾸기 전에 먼저 물어봐요">에이전트</button></div>
+ <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button></div>
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+'개'}</span>`:''}</button>
  <span class="grow"></span>
  ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:`<button type="submit" class="send" id="send" aria-label="보내기"${canSend()?'':' disabled'}>${icon('up')}</button>`}`;
@@ -435,7 +435,17 @@ function onTransition(before,after){
  }
 }
 function notify(title,body){try{if(document.hasFocus()||!('Notification' in window)||Notification.permission!=='granted')return;new Notification(title,{body});}catch{}}
-function askNotify(){try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});}catch{}}
+function notificationHTML(){
+ if(!('Notification' in window))return '<span class="hint">이 환경에서는 알림을 사용할 수 없어요.</span>';
+ if(Notification.permission==='granted')return '<span class="hint">알림이 허용되어 있어요.</span>';
+ if(Notification.permission==='denied')return '<span class="hint">알림이 차단되어 있어요. 브라우저 또는 macOS 알림 설정에서 허용해 주세요.</span>';
+ return '<button type="button" class="btn" data-act="enable-notifications">알림 켜기</button><span class="hint">작업 완료나 확인 요청을 알려 드려요.</span>';
+}
+async function enableNotifications(){
+ if(!('Notification' in window)||Notification.permission!=='default')return;
+ await Notification.requestPermission();
+ const section=$('notification-setting');if(section)section.innerHTML=notificationHTML();
+}
 async function send(){
  const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
  if((!text&&!files.length)||S.sending||runActive())return;
@@ -462,7 +472,6 @@ async function send(){
   S.data.active={...(S.data.active||{}),[sid]:'running'};
   if(S.epoch===epoch&&S.sid===sid)await loadDetail();
   refreshState().then(()=>renderSide()).catch(()=>{});
-  askNotify();
  }catch(err){toast(err.message,true);}
  finally{S.sending=false;if(S.view==='chat')renderTools();}
 }
@@ -645,10 +654,21 @@ function editProvider(id){
  $('provider-form').addEventListener('submit',ev=>{ev.preventDefault();const f=new FormData(ev.target),body=Object.fromEntries(f);body.tools_enabled=f.has('tools_enabled');body.clear_key=f.has('clear_key');if(old)body.id=old.id;
   submitForm(ev.target,async()=>{const saved=await api('/api/providers',{method:'POST',body});delete S.models[saved.id];delete S.modelFetch[saved.id];delete S.tests[saved.id];await refreshState();closeDialog();renderAll();toast('저장했어요');});});
 }
-function editSkill(id,instructions=''){
- const sk=(S.data.skills||[]).find(s=>String(s.id)===String(id))||{name:'',description:'',instructions,enabled:true};
- openDialog(id?'스킬 편집':'새 스킬',`<form class="form" id="skill-form"><div class="field"><label for="sf-name">이름</label><input id="sf-name" name="name" required maxlength="100" value="${esc(sk.name)}" placeholder="예: 출처 있는 리서치"></div><div class="field"><label for="sf-desc">언제 쓰나요</label><input id="sf-desc" name="description" maxlength="300" value="${esc(sk.description)}" placeholder="예: 자료를 모아 보고서로 정리할 때"></div><div class="field"><label for="sf-ins">지침</label><textarea id="sf-ins" name="instructions" rows="9" required maxlength="20000" placeholder="목표, 순서, 끝났다고 볼 기준을 적어 주세요.">${esc(sk.instructions)}</textarea></div><label class="check"><input type="checkbox" name="enabled"${sk.enabled?' checked':''}><span>대화에서 고를 수 있게 켜 두기</span></label><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{wide:true});
+function editSkill(id,instructions='',draft=null){
+ const sk=(S.data.skills||[]).find(s=>String(s.id)===String(id))||draft||{name:'',description:'',instructions,enabled:true};
+ openDialog(id?'스킬 편집':draft?'가져온 스킬 확인':'새 스킬',`<form class="form" id="skill-form"><div class="field"><label for="sf-name">이름</label><input id="sf-name" name="name" required maxlength="100" value="${esc(sk.name)}" placeholder="예: 출처 있는 리서치"></div><div class="field"><label for="sf-desc">언제 쓰나요</label><input id="sf-desc" name="description" maxlength="300" value="${esc(sk.description)}" placeholder="예: 자료를 모아 보고서로 정리할 때"></div><div class="field"><label for="sf-ins">지침</label><textarea id="sf-ins" name="instructions" rows="9" required maxlength="20000" placeholder="목표, 순서, 끝났다고 볼 기준을 적어 주세요.">${esc(sk.instructions)}</textarea></div><label class="check"><input type="checkbox" name="enabled"${sk.enabled?' checked':''}><span>대화에서 고를 수 있게 켜 두기</span></label><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{wide:true,desc:draft?'선택한 파일의 지침만 복사해 모델에 전달해요. 도구와 참조 파일은 자동으로 추가되지 않아요. 파일 도구는 전체 접근 설정이 아니면 작업 폴더 밖을 읽지 못하며, 터미널 명령은 승인 설정을 따라요.':''});
  $('skill-form').addEventListener('submit',ev=>{ev.preventDefault();const f=new FormData(ev.target),body=Object.fromEntries(f);body.enabled=f.has('enabled');if(id)body.id=id;submitForm(ev.target,async()=>{await api('/api/skills',{method:'POST',body});await refreshState();closeDialog();if(S.view==='skills')renderSkills();toast('스킬을 저장했어요');});});
+}
+function parseSkillFile(text,filename){
+ if(!text.trim()||text.length>20000)throw Error('스킬 지침은 1~20,000자여야 해요.');
+ const front=text.replace(/^\uFEFF/,'').match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1]||'';
+ const field=key=>{let v=front.match(new RegExp('^'+key+':\\s*(.*)$','m'))?.[1]?.trim()||'';if(v==='>'||v==='|')return '';if(v.startsWith('"')&&v.endsWith('"')){try{return JSON.parse(v)}catch{return v.slice(1,-1)}}if(v.startsWith("'")&&v.endsWith("'"))return v.slice(1,-1).replace(/''/g,"'");return v;};
+ return {name:(field('name')||filename.replace(/\.md$/i,'')||'가져온 스킬').slice(0,100),description:field('description').slice(0,300),instructions:text,enabled:true};
+}
+function importSkill(){
+ const picker=document.createElement('input');picker.type='file';picker.accept='.md,text/markdown';
+ picker.addEventListener('change',async()=>{const file=picker.files?.[0];if(!file)return;try{if(file.size>80000)throw Error('스킬 지침은 20,000자 이하여야 해요.');editSkill(null,'',parseSkillFile(await file.text(),file.name));}catch(err){toast(err.message||'파일을 읽지 못했어요.',true);}});
+ picker.click();
 }
 function saveMemoryDialog(content){
  openDialog('메모리로 저장',`<form class="form" id="mem-form"><div class="field"><label for="mf-text">기억할 내용</label><textarea id="mf-text" rows="7" maxlength="4000" required>${esc(String(content).slice(0,4000))}</textarea></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{desc:'다음 대화부터 함께 전달돼요. 필요한 부분만 남기세요.',wide:true});
@@ -695,7 +715,7 @@ function renderModels(){
 }
 function renderSkills(){
  const list=S.data.skills||[];
- $('main').innerHTML=page('스킬',`<p class="lead">자주 하는 일의 방식을 적어 두면 대화에서 골라 쓸 수 있어요.</p><div class="panel">${list.length?list.map(s=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit','편집','edit-skill',s.id)}${iconBtn('trash','삭제','delete-skill',s.id)}</div></div>`).join(''):'<div class="blank"><p>아직 스킬이 없어요.</p></div>'}</div>`,`<button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button>`);
+ $('main').innerHTML=page('스킬',`<p class="lead">자주 하는 일의 방식을 적어 두면 대화에서 골라 쓸 수 있어요.</p><div class="panel">${list.length?list.map(s=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit','편집','edit-skill',s.id)}${iconBtn('trash','삭제','delete-skill',s.id)}</div></div>`).join(''):'<div class="blank"><p>아직 스킬이 없어요.</p></div>'}</div>`,`<div class="acts2"><button type="button" class="btn" data-act="import-skill">가져오기</button><button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button></div>`);
 }
 function renderMemory(){
  const list=S.data.memories||[];
@@ -707,6 +727,7 @@ function renderSettings(){
  const picker=id=>desk?`<button type="button" class="btn" data-act="pick-folder" data-id="${id}" title="폴더 고르기">${icon('folder')}고르기</button>`:'';
  $('main').innerHTML=page('설정',`<form class="form" id="settings-form">
  <h2>화면</h2><div class="seg wide" role="group" aria-label="밝기">${[['system','시스템'],['light','밝게'],['dark','어둡게']].map(([k,n])=>`<button type="button" data-act="theme" data-id="${k}" aria-pressed="${theme===k}">${n}</button>`).join('')}</div>
+ <h2>알림</h2><div class="field" id="notification-setting">${notificationHTML()}</div>
  <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">실행 시 루트의 프로젝트 지침 파일은 연결된 모델 제공자에 전달돼요. 파일 접근 범위는 아래 도구 승인 설정에 따라 달라져요.</span></div>
  <div class="field"><label for="st-rp">보고서 폴더</label><div class="inrow"><input id="st-rp" name="report_directory" required value="${esc(x.report_directory)}">${picker('st-rp')}</div></div>
  <h2>도구 승인</h2><div class="field"><label for="st-access">접근 권한</label><select id="st-access" name="access_mode" aria-describedby="st-access-help">${[['manual','매번 승인'],['auto_approve','자동 승인 (Approve for me)'],['full_access','전체 접근 (Full access)']].map(([k,n])=>`<option value="${k}"${(x.access_mode||'manual')===k?' selected':''}>${n}</option>`).join('')}</select><div id="st-access-help" class="hint">
@@ -773,11 +794,13 @@ const ACT={
  'test-provider':async el=>{const id=el.dataset.id;S.tests[id]={pending:true};renderModels();try{const r=await api(`/api/providers/${enc(id)}/test`,{method:'POST',body:{}});S.tests[id]=r;if(r.models?.length)S.models[id]=r.models;}catch(err){S.tests[id]={ok:false,message:err.message};}if(S.view==='models')renderModels();},
  'use-provider':el=>{const p=providerById(el.dataset.id);if(!p)return;S.providerId=p.id;S.model=p.model||'';newChat();},
  'add-skill':()=>editSkill(),
+ 'import-skill':()=>importSkill(),
  'edit-skill':el=>editSkill(el.dataset.id),
  'delete-skill':el=>confirmDialog('스킬을 삭제할까요?','이 스킬의 지침이 지워져요.','삭제',async()=>{await api(`/api/skills/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();renderSkills();toast('삭제했어요');}),
  'skill-toggle':async el=>{const s=S.data.skills.find(x=>String(x.id)===el.dataset.id);if(!s)return;el.setAttribute('aria-checked',String(!s.enabled));try{await api('/api/skills',{method:'POST',body:{...s,enabled:!s.enabled}});await refreshState();renderSkills();}catch(err){toast(err.message,true);renderSkills();}},
  'delete-memory':el=>confirmDialog('이 메모리를 지울까요?','앞으로의 대화에 더는 전달되지 않아요.','지우기',async()=>{await api(`/api/memories/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();renderMemory();}),
  'theme':el=>{pref.set('theme',el.dataset.id);applyTheme();document.querySelectorAll('[data-act="theme"]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));},
+ 'enable-notifications':()=>enableNotifications(),
  'pick-folder':async el=>{const path=await window.naruDesktop?.chooseDirectory?.();if(path)$(el.dataset.id).value=path;},
  'retry-boot':()=>boot(),
 };
@@ -846,7 +869,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,enableNotifications,notificationHTML,parseSkillFile,importSkill,S};return;}
 setInterval(tick,280);
 boot();
 })();

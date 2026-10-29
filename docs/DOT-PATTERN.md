@@ -18,5 +18,7 @@ The CSS custom properties in `public/styles.css` are the source of truth:
 
 - The hero uses a static grid, reduced in the center and stronger toward the edges. The grid sits above the WebGL or CSS fallback background, below the heading and composer, and never captures pointer events.
 - The sidebar uses the same spacing and radius, fading toward the bottom. Text and controls remain visually foregrounded.
-- Keep conversation text, form inputs, menus and approval panels on solid surfaces for legibility. The texture does not animate, so reduced-motion mode needs no separate treatment.
+- Keep conversation text, form inputs, menus and approval panels on solid surfaces for legibility. The halftone artwork drifts slowly, pauses when the window is hidden, and remains still when reduced motion is requested.
 - Use the same CSS-pixel spacing on narrow screens. Do not rasterize or stretch a bitmap: the CSS pattern remains sharp on Retina and other displays.
+
+The Defined hero uses `public/defined-halftone.svg` for varied dot sizes and colors. `public/hero-motion.css` moves that artwork beneath the fine dot overlay. This is an approximation; the design-system HalftoneField source was not available locally.

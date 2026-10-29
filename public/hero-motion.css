@@ -1,0 +1,9 @@
+.hero::before{content:none}
+.hero-pattern{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;
+ mask-image:radial-gradient(ellipse 48% 48% at 50% 43%,#0006 0%,#000d 65%,#000 100%);
+ -webkit-mask-image:radial-gradient(ellipse 48% 48% at 50% 43%,#0006 0%,#000d 65%,#000 100%)}
+.hero-pattern span{position:absolute;inset:-5%;background:url('/defined-halftone.svg') center/cover no-repeat;opacity:.9;
+ animation:naru-sea-drift 14s ease-in-out infinite alternate}
+@keyframes naru-sea-drift{from{transform:translate3d(-2%,-1%,0)}to{transform:translate3d(2%,1%,0)}}
+.page-hidden .hero-pattern span{animation-play-state:paused}
+@media (prefers-reduced-motion:reduce){.hero-pattern span{animation:none;transform:none}}

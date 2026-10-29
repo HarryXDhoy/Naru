@@ -8,12 +8,13 @@ const c={console,URL,JSON,Date,Intl,Number,String,Map,Set,Math,TextDecoder,Error
  window:{addEventListener(){},naruDesktop:{getPreference:k=>nativePrefs[k]??null,setPreference:(k,v)=>{if(v==null)delete nativePrefs[k];else nativePrefs[k]=v;return true}}},
  addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),localStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout,clearTimeout,setInterval(){},clearInterval(){},navigator:{},getComputedStyle:()=>({})};
 c.globalThis=c;Object.assign(c.window,c);
+let notificationRequests=0;c.Notification={permission:'default',async requestPermission(){notificationRequests++;this.permission='granted';return 'granted'}};c.window.Notification=c.Notification;
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve};}
 let session=deferred(),message=deferred();const requests=[];
 const response=x=>({ok:true,json:async()=>x});
 c.fetch=async(url,opts)=>{requests.push({url,body:opts.body?JSON.parse(opts.body):null});if(url==='/api/sessions')return session.promise;if(url.endsWith('/messages'))return message.promise;if(url==='/api/state')return response(c.NaruUI.S.data);if(url==='/api/sessions/existing'||url==='/api/sessions/created2')return response({session:{provider_id:'p1',model:'original',mode:'agent'},runs:[],messages:[]});throw Error('unexpected '+url)};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8'),c);
-const {S,send,pref}=c.NaruUI;
+const {S,send,pref,enableNotifications,notificationHTML}=c.NaruUI;
 S.data={providers:[{id:'p1',kind:'codex',name:'ChatGPT'},{id:'p2',kind:'openai',name:'Other'}],skills:[{id:'s1',enabled:true},{id:'s2',enabled:true}],sessions:[],active:{},csrf_token:'test'};
 S.accounts={codex:{available:true,authenticated:true}};S.providerId='p1';S.model='original';S.mode='agent';S.skillIds=['s1'];S.view='models';
 const input=c.document.getElementById('input');input.value='first request';S.drafts.new=input.value;
@@ -40,6 +41,11 @@ const input=c.document.getElementById('input');input.value='first request';S.dra
  assert.equal(S.drafts.created2,'later');assert.equal(S.files.created2[0],secondFile);
  message.resolve(response({run_id:'created2-run'}));await creating;
  assert.equal(S.drafts.created2,'later');assert.equal(S.files.created2[0],secondFile);
+ assert.equal(notificationRequests,0,'sending must not ask for notification permission');
+ assert.match(notificationHTML(),/알림 켜기/);
+ await enableNotifications();assert.equal(notificationRequests,1,'explicit enable requests permission');
+ assert.match(c.document.getElementById('notification-setting').innerHTML,/허용되어 있어요/);
+ await enableNotifications();assert.equal(notificationRequests,1,'already granted permission is not requested again');
  pref.set('theme','light');assert.equal(nativePrefs.theme,'light');
  // A fresh renderer/localStorage origin should read the durable desktop value.
  assert.equal(pref.get('theme','dark'),'light');pref.set('theme',null);assert.equal(pref.get('theme','dark'),'dark');
