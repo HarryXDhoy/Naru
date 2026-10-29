@@ -206,7 +206,7 @@ function renderAll(){renderSide();renderTop();renderMain();}
 
 function renderSide(){
  const d=S.data;if(!d)return;const active=d.active||{};
- const nav=[['models','plug','모델'],['skills','skill','스킬'],['memory','memory','메모리'],['settings','settings','설정']];
+ const nav=[['models','plug','모델'],['skills','skill','스킬'],['workflows','bolt','작업 흐름'],['memory','memory','메모리'],['settings','settings','설정']];
  $('side').innerHTML=`<div class="side-top">${WORDMARK}<span class="grow"></span>${iconBtn('sidebar','사이드바 숨기기 (⌘\\)','toggle-side')}</div>
  <button type="button" class="side-item strong" data-act="new" title="새 대화 (⌘N)">${icon('compose')}<span>새 대화</span></button>
  <button type="button" class="side-item" data-act="palette" title="검색 (⌘K)">${icon('search')}<span>검색</span></button>
@@ -225,7 +225,7 @@ function renderTop(){
  if(s){const n=S.detail.artifacts?.length||0;html+=`<button type="button" class="icon-btn ${S.drawer?'on':''}" data-act="drawer" title="파일과 실행 정보 (⌘J)" aria-label="파일과 실행 정보" aria-pressed="${S.drawer}">${icon('files')}${n?`<span class="count">${n}</span>`:''}</button>${iconBtn('more','대화 메뉴','chat-menu')}`;}
  t.innerHTML=html;
 }
-function renderMain(){if(S.view!=='chat')stopHero();if(S.view==='chat')renderChat();else if(S.view==='models')renderModels();else if(S.view==='skills')renderSkills();else if(S.view==='memory')renderMemory();else renderSettings();}
+function renderMain(){if(S.view!=='chat')stopHero();if(S.view==='chat')renderChat();else if(S.view==='models')renderModels();else if(S.view==='skills')renderSkills();else if(S.view==='workflows')renderWorkflows();else if(S.view==='memory')renderMemory();else renderSettings();}
 
 // ---------- chat ----------
 function renderChat(){
@@ -788,6 +788,40 @@ function renderSkills(){
  const list=S.data.skills||[];
  $('main').innerHTML=page('스킬',`<p class="lead">스킬 지침은 모델에 전달되며, 도구는 에이전트 모드의 승인 설정을 따라요.</p><div class="panel">${list.length?list.map(s=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}${s.source_dir?`<span class="sub" title="${esc(s.source_dir)}">폴더 연결됨</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit','편집','edit-skill',s.id)}${iconBtn('trash','삭제','delete-skill',s.id)}</div></div>`).join(''):'<div class="blank"><p>아직 스킬이 없어요.</p></div>'}</div>`,`<div class="skill-actions"><button type="button" class="btn" data-act="discover-skills">설치된 스킬 찾기</button><button type="button" class="btn" data-act="import-skill-folder">스킬 폴더 연결</button><button type="button" class="btn" data-act="import-skill">파일만 가져오기</button><button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button></div>`);
 }
+function renderWorkflows(){
+ const list=S.data.workflows||[];
+ $('main').innerHTML=page('작업 흐름',`<p class="lead">선택한 모델로 새 대화를 시작해요. 모델 사용량과 도구 승인 설정이 적용돼요.</p><div class="panel">${list.length?list.map(w=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('bolt')}</span><div class="txt"><div class="name">${esc(w.name)} <span class="badge neutral">${w.mode==='agent'?'에이전트':'대화'}</span></div></div><div class="acts2"><button type="button" class="btn primary sm" data-act="run-workflow" data-id="${esc(w.id)}">실행</button>${iconBtn('edit','편집','edit-workflow',w.id)}${iconBtn('trash','삭제','delete-workflow',w.id)}</div></div>`).join(''):'<div class="blank"><p>저장된 작업 흐름이 없어요.</p></div>'}</div>`,`<button type="button" class="btn primary" data-act="add-workflow">${icon('plus')}작업 흐름 만들기</button>`);
+}
+function editWorkflow(id){
+ const item=id?(S.data.workflows||[]).find(w=>String(w.id)===String(id)):null;if(id&&!item)return;
+ const w=item||{name:'',prompt:'',mode:'agent'};
+ openDialog(id?'작업 흐름 편집':'작업 흐름 만들기',`<form class="form" id="workflow-form"><div class="field"><label for="wf-name">이름</label><input id="wf-name" name="name" maxlength="100" required value="${esc(w.name)}"></div><div class="field"><label for="wf-prompt">지침</label><textarea id="wf-prompt" name="prompt" rows="7" maxlength="20000" required>${esc(w.prompt)}</textarea></div><div class="field"><label for="wf-mode">작업 방식</label><select id="wf-mode" name="mode"><option value="agent"${w.mode==='agent'?' selected':''}>에이전트</option><option value="chat"${w.mode==='chat'?' selected':''}>대화</option></select></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{wide:true});
+ $('workflow-form').addEventListener('submit',ev=>{ev.preventDefault();const body=Object.fromEntries(new FormData(ev.target));submitForm(ev.target,async()=>{await api(id?`/api/workflows/${enc(id)}`:'/api/workflows',{method:id?'PATCH':'POST',body});await refreshState();closeDialog();if(S.view==='workflows')renderWorkflows();toast('저장했어요');});});
+}
+async function runWorkflow(id){
+ if(S.workflowStarting)return;
+ const w=(S.data.workflows||[]).find(x=>String(x.id)===String(id));if(!w)return;
+ const p=provider(),acct=accountOf(p);
+ if(!p){go('models');toast('먼저 모델을 연결하세요.');return;}
+ if(isAccount(p)&&acct?.execution_blocked){go('models');toast(acct.message||'이 계정 연결은 사용할 수 없습니다.',true);return;}
+ if(isAccount(p)&&acct&&(!acct.available||!acct.authenticated)){go('models');toast(`${p.name} 연결 상태를 확인하세요.`,true);return;}
+ if(!isAccount(p)&&!S.model&&!p.model){toast('대화에서 사용할 모델을 먼저 선택하세요.',true);return;}
+ const pageEl=$('page'),epoch=S.epoch,model=S.model,mode=w.mode,skillIds=selectedSkills().map(s=>s.id),content=w.prompt;S.workflowStarting=true;
+ try{
+  const session=await api('/api/sessions',{method:'POST',body:{title:w.name,provider_id:p.id,model,mode}});
+  if(!S.data.sessions.some(s=>s.id===session.id))S.data.sessions.unshift(session);
+  try{await api(`/api/sessions/${enc(session.id)}/messages`,{method:'POST',body:{content,provider_id:p.id,model,mode,skill_ids:skillIds}});}
+  catch(err){
+   S.drafts[session.id]=content;
+   if(S.view==='workflows'&&S.epoch===epoch&&$('page')===pageEl)await selectSession(session.id);
+   refreshState().then(()=>renderSide()).catch(()=>{});
+   throw new Error('작업을 시작하지 못해 지침을 새 대화의 초안에 보관했어요. '+err.message);
+  }
+  S.data.active={...(S.data.active||{}),[session.id]:'running'};
+  if(S.view==='workflows'&&S.epoch===epoch&&$('page')===pageEl)await selectSession(session.id);
+  refreshState().then(()=>renderSide()).catch(()=>{});
+ }finally{S.workflowStarting=false;}
+}
 function renderMemory(){
  const list=S.data.memories||[];
  $('main').innerHTML=page('메모리',`<p class="lead">여기 적은 내용은 모든 대화에 함께 전달돼요. 직접 적은 것만 기억해요.</p><form class="panel" id="memory-form" style="padding:12px;gap:8px"><label class="sr" for="memory-input">새 메모리</label><textarea id="memory-input" rows="3" maxlength="4000" placeholder="예: 보고서는 짧은 문단으로, 결론부터 써 줘." style="box-shadow:none;padding:4px 6px;min-height:64px"></textarea><div class="actions" style="margin:0"><button type="submit" class="btn primary">저장</button></div></form>${list.length?`<h2>저장한 내용</h2><div class="panel">${list.map(m=>`<div class="item"><div class="txt body-text">${esc(m.content)}</div><div class="acts2">${iconBtn('trash','삭제','delete-memory',m.id)}</div></div>`).join('')}</div>`:''}`);
@@ -875,6 +909,10 @@ const ACT={
  'edit-skill':el=>editSkill(el.dataset.id),
  'delete-skill':el=>confirmDialog('스킬을 삭제할까요?','이 스킬의 지침이 지워져요.','삭제',async()=>{await api(`/api/skills/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();renderSkills();toast('삭제했어요');}),
  'skill-toggle':async el=>{const s=S.data.skills.find(x=>String(x.id)===el.dataset.id);if(!s)return;el.setAttribute('aria-checked',String(!s.enabled));try{await api('/api/skills',{method:'POST',body:{...s,enabled:!s.enabled}});await refreshState();renderSkills();}catch(err){toast(err.message,true);renderSkills();}},
+ 'add-workflow':()=>editWorkflow(),
+ 'edit-workflow':el=>editWorkflow(el.dataset.id),
+ 'delete-workflow':el=>confirmDialog('작업 흐름을 삭제할까요?','이 설정만 삭제되고 이전 대화는 남아요.','삭제',async()=>{await api(`/api/workflows/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();if(S.view==='workflows')renderWorkflows();toast('삭제했어요');}),
+ 'run-workflow':async el=>{el.disabled=true;try{await runWorkflow(el.dataset.id);}finally{if(el.isConnected)el.disabled=false;}},
  'delete-memory':el=>confirmDialog('이 메모리를 지울까요?','앞으로의 대화에 더는 전달되지 않아요.','지우기',async()=>{await api(`/api/memories/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();renderMemory();}),
  'theme':el=>{pref.set('theme',el.dataset.id);applyTheme();document.querySelectorAll('[data-act="theme"]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));},
  'enable-notifications':()=>enableNotifications(),
@@ -946,7 +984,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,S};return;}
 setInterval(tick,280);
 boot();
 })();

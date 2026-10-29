@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import providers
 import accounts
 
-VERSION='0.2.8'
-TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings','queued_messages'}
+VERSION='0.2.9'
+TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings','queued_messages','workflows'}
 INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',),'queued_messages':('session_id',)}
 ACTIVE=('running','awaiting_approval')
 APPROVAL_TOOLS={'write_file','edit_file','run_command','search_sessions','git_diff','load_skill'}
@@ -272,6 +272,16 @@ class Runtime:
         skill=self.inspect_skill(path)
         existing=next((s for s in self.store.all('skills') if s.get('source_dir')==skill['source_dir']),None)
         return existing or self.store.put('skills',{'id':uid(),**skill,'enabled':True})
+    def save_workflow(self,body,id=None):
+        with self.store.lock:
+            old=self.store.get('workflows',id) if id else None
+            if id and not old:raise ValueError('작업 흐름을 찾을 수 없습니다.')
+            data={k:body.get(k,(old or {}).get(k,default)) for k,default in (('name',''),('prompt',''),('mode','agent'))}
+            if not isinstance(data['name'],str) or not 1<=len(data['name'].strip())<=100:raise ValueError('작업 흐름 이름은 1~100자여야 합니다.')
+            if not isinstance(data['prompt'],str) or not 1<=len(data['prompt'].strip())<=20000:raise ValueError('작업 지침은 1~20,000자여야 합니다.')
+            if data['mode'] not in ('chat','agent'):raise ValueError('올바른 실행 모드를 선택해 주세요.')
+            data['name']=data['name'].strip();data['prompt']=data['prompt'].strip()
+            return self.store.put('workflows',{'id':id or uid(),**data})
     def event(self,run_id,type,data):return self.store.put('events',{'id':uid(),'run_id':run_id,'type':type,'data':data,'created_at':now()})
     def session(self,id):
         s=self.store.get('sessions',id)
@@ -972,11 +982,19 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/health':return self.send({'ok':True,'version':VERSION})
             if path=='/api/state':
                 acct=rt.accounts_cached()
-                return self.send({'providers':db.all('providers'),'sessions':sorted(db.all('sessions'),key=lambda s:s['updated_at'],reverse=True),'settings':rt.settings(),'skills':db.all('skills'),'memories':db.all('memories'),'oauth':(acct or {}).get('codex') or {'available':False,'authenticated':False,'message':'','checking':True},'accounts':acct,'active':{sid:db.field('runs',rid,'status') for sid,rid in list(rt.active.items())},'version':VERSION,'csrf_token':rt.csrf,'rev':db.rev})
+                return self.send({'providers':db.all('providers'),'sessions':sorted(db.all('sessions'),key=lambda s:s['updated_at'],reverse=True),'settings':rt.settings(),'skills':db.all('skills'),'memories':db.all('memories'),'workflows':db.all('workflows'),'oauth':(acct or {}).get('codex') or {'available':False,'authenticated':False,'message':'','checking':True},'accounts':acct,'active':{sid:db.field('runs',rid,'status') for sid,rid in list(rt.active.items())},'version':VERSION,'csrf_token':rt.csrf,'rev':db.rev})
             if path=='/api/search':return self.send(rt.search(query.get('q',[''])[0][:200]))
             body=self.body() if method in ('POST','PATCH') else {}
             if path=='/api/oauth/status':return self.send(rt.accounts_status(True)['codex'])
             if path=='/api/oauth/login' and method=='POST':return self.send(rt.account_login('codex'))
+            if parts[1]=='workflows':
+                if len(parts)==2 and method=='POST':return self.send(rt.save_workflow(body))
+                if len(parts)==3 and method=='PATCH':return self.send(rt.save_workflow(body,parts[2]))
+                if len(parts)==3 and method=='DELETE':
+                    with db.lock:
+                        if not db.get('workflows',parts[2]):raise ValueError('작업 흐름을 찾을 수 없습니다.')
+                        db.delete('workflows',parts[2])
+                    return self.send({'ok':True})
             if parts[1]=='accounts':
                 if len(parts)==2 and method=='GET':return self.send(rt.accounts_status(query.get('refresh',['0'])[0]=='1'))
                 if len(parts)==4 and parts[3]=='login' and method=='POST':return self.send(rt.account_login(parts[2]))
