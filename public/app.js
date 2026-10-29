@@ -252,7 +252,7 @@ function wireComposer(){
 function renderTools(){
  const el=$('tools');if(!el)return;const active=runActive(),sk=selectedSkills();
  el.innerHTML=`${iconBtn('clip','파일 첨부','attach')}
- <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="menu" title="모델 바꾸기"${active?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
+ <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="dialog" title="모델 바꾸기"${active?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
  <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button></div>
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+'개'}</span>`:''}</button>
  <span class="grow"></span>
@@ -520,13 +520,17 @@ function modelOptions(p){
  for(const m of [p.model,String(p.id)===String(S.providerId)?S.model:''])if(m&&!options.includes(m))options.unshift(m);
  return options;
 }
-function modelMenuHTML(){
- const parts=[];
+function modelMenuHTML(query=''){
+ const parts=[],term=String(query).trim().toLocaleLowerCase();let matches=0;
  for(const p of providers()){
   const acct=isAccount(p)?accountOf(p):null,locked=acct&&(acct.execution_blocked||!acct.available||!acct.authenticated),state=S.modelFetch[p.id]||{};
+  const providerMatch=!term||`${p.name} ${p.id}`.toLocaleLowerCase().includes(term);
+  const models=modelOptions(p).filter(m=>providerMatch||(m||'기본 모델').toLocaleLowerCase().includes(term));
+  if(!providerMatch&&(!models.length||locked))continue;
+  matches++;
   parts.push(`<div class="grp">${esc(p.name)}${locked?(acct.execution_blocked?'<span class="badge attention">사용 일시 중지</span>':acct.available?'<span class="badge attention">로그인 필요</span>':'<span class="badge neutral">설치 필요</span>'):''}</div>`);
   if(locked){parts.push(`<button type="button" class="opt dim" data-pick="go-models">${icon('key')}<span>연결하러 가기</span></button>`);continue;}
-  for(const m of modelOptions(p)){const on=String(p.id)===String(S.providerId)&&(S.model||'')===(m||'');parts.push(`<button type="button" class="opt" role="menuitemradio" aria-checked="${on}" data-pick="m" data-p="${esc(p.id)}" data-m="${esc(m)}"><span>${esc(m||'기본 모델')}</span>${on?icon('check','tick'):''}</button>`);}
+  for(const m of models){const on=String(p.id)===String(S.providerId)&&(S.model||'')===(m||'');parts.push(`<button type="button" class="opt" role="menuitemradio" aria-checked="${on}" data-pick="m" data-p="${esc(p.id)}" data-m="${esc(m)}"><span>${esc(m||'기본 모델')}</span>${on?icon('check','tick'):''}</button>`);}
   if(state.loading)parts.push('<div class="loading"><span class="spinner"></span>모델 불러오는 중</div>');
   else if(state.error)parts.push(`<div class="loading">${esc(state.error)}</div>`);
   else if(S.models[p.id]&&!S.models[p.id].length&&p.kind!=='codex')parts.push(`<div class="loading">${['claude_code','gemini_cli','copilot_cli'].includes(p.kind)?'자동 모델 목록을 제공하지 않아요. 모델 ID를 직접 입력하세요.':'사용 가능한 모델이 없어요'}</div>`);
@@ -535,13 +539,19 @@ function modelMenuHTML(){
   parts.push(`<button type="button" class="opt dim" data-pick="refresh-models" data-p="${esc(p.id)}">${icon('retry')}<span>모델 목록 새로고침</span></button>`);
   parts.push(`<div class="inline" hidden data-custom="${esc(p.id)}"><input type="text" placeholder="모델 ID" aria-label="${esc(p.name)} 모델 ID"><button type="button" class="btn sm primary" data-pick="custom" data-p="${esc(p.id)}">사용</button></div><button type="button" class="opt dim" data-pick="custom-open" data-p="${esc(p.id)}">${icon('plus')}<span>모델 ID 입력</span></button>`);
  }
+ if(term&&!matches){const states=providers().map(p=>S.modelFetch[p.id]||{});const message=states.some(x=>x.loading)?'모델 불러오는 중':states.some(x=>x.error)?'검색 결과가 없어요. 일부 목록을 불러오지 못했어요.':'검색 결과가 없어요. 검색어를 지우면 모델 ID를 직접 입력할 수 있어요.';parts.push(`<div class="loading" role="status">${message}</div>`);}
  parts.push(`<div class="sep"></div><button type="button" class="opt" data-pick="go-models">${icon('plug')}<span>연결 관리</span></button>`);
  return parts.join('');
 }
-function redrawModelMenu(){
+function redrawModelMenu(force=false){
  if(!pop||pop.anchor?.id!=='model-chip')return;
- const el=pop.el;if(el.querySelector('[data-custom]:not([hidden])'))return;
- const scroll=el.scrollTop;el.innerHTML=modelMenuHTML();el.scrollTop=scroll;placePop();
+ const el=pop.el;if(!force&&el.querySelector('[data-custom]:not([hidden])'))return;
+ const results=el.querySelector('[data-model-results]'),search=el.querySelector('[data-model-search]');if(!results||!search)return;
+ const focused=results.contains(document.activeElement)?document.activeElement:null;
+ const key=focused?.dataset?{pick:focused.dataset.pick,p:focused.dataset.p,m:focused.dataset.m}:null;
+ const scroll=el.scrollTop;results.innerHTML=modelMenuHTML(search.value);
+ if(key?.pick){const next=[...results.querySelectorAll('[data-pick]')].find(t=>t.dataset.pick===key.pick&&t.dataset.p===key.p&&t.dataset.m===key.m);next?.focus();}
+ el.scrollTop=scroll;placePop();
 }
 async function loadProviderModels(p,force=false){
  const id=p.id,old=S.modelFetch[id];
@@ -566,7 +576,7 @@ function discoverModels(force=false){
 }
 function modelMenu(){
  const anchor=$('model-chip');if(!anchor)return;
- const el=openPop(anchor,modelMenuHTML(),{width:300,onPick:async(kind,t)=>{
+ const el=openPop(anchor,`<div class="model-search"><input type="search" data-model-search aria-label="모델 검색" placeholder="모델 검색" autocomplete="off"></div><div data-model-results role="menu" aria-label="모델 목록">${modelMenuHTML()}</div>`,{width:300,onPick:async(kind,t)=>{
   if(kind==='go-models'){closePop();go('models');return;}
   if(kind==='refresh-models'){const p=providerById(t.dataset.p);if(p)await loadProviderModels(p,true);return;}
   if(kind==='custom-open'){const box=el.querySelector(`[data-custom="${CSS.escape(t.dataset.p)}"]`);box.hidden=false;t.hidden=true;box.querySelector('input').focus();return;}
@@ -574,8 +584,15 @@ function modelMenu(){
   if(kind==='custom'&&!model)return;
   closePop();await setModel(pid,model);
  }});
- el.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.matches('[data-custom] input')){ev.preventDefault();ev.target.parentElement.querySelector('[data-pick="custom"]').click();}});
- discoverModels();
+ el.setAttribute('role','dialog');el.setAttribute('aria-label','모델 선택');
+ const search=el.querySelector('[data-model-search]');search.addEventListener('input',()=>{el.scrollTop=0;redrawModelMenu(true);});
+ el.addEventListener('keydown',ev=>{
+  if(ev.isComposing||ev.keyCode===229)return;
+  if(ev.target===search&&ev.key==='ArrowDown'){const first=el.querySelector('[data-pick="m"]');if(first){ev.preventDefault();first.focus();}}
+  else if(ev.target===search&&ev.key==='Enter'){const first=el.querySelector('[data-pick="m"]');if(first){ev.preventDefault();first.click();}}
+  else if(ev.key==='Enter'&&ev.target.matches('[data-custom] input')){ev.preventDefault();ev.target.parentElement.querySelector('[data-pick="custom"]').click();}
+ });
+ search.focus();discoverModels();
 }
 async function setModel(pid,model){
  S.providerId=pid;S.model=model;renderTools();
@@ -880,7 +897,7 @@ document.addEventListener('click',async ev=>{
 });
 document.addEventListener('keydown',ev=>{
  const mod=ev.metaKey||ev.ctrlKey,k=ev.key.toLowerCase();
- if(ev.key==='Escape'){if(palette){closePalette();return;}if(pop){closePop();return;}closeSide();}
+ if(ev.key==='Escape'){if(palette){closePalette();return;}if(pop){const anchor=pop.anchor;closePop();anchor?.focus();return;}closeSide();}
  if(!mod)return;
  if(k==='k'){ev.preventDefault();palette?closePalette():openPalette();}
  else if(k==='n'&&!$('dialog').open){ev.preventDefault();newChat();}
@@ -929,7 +946,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,S};return;}
 setInterval(tick,280);
 boot();
 })();

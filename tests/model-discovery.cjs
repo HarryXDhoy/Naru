@@ -23,6 +23,13 @@ S.data={providers:[chat,local],accounts:{codex:{available:true,authenticated:tru
  html=modelMenuHTML();
  assert(html.includes('사용 일시 중지'),'blocked account is not presented as available');
  assert(!html.includes('data-p="gemini" data-m='),'blocked account models cannot be selected');
+ html=modelMenuHTML('MODEL-B');assert(html.includes('data-m="model-b"')&&!html.includes('data-m="model-a"'),'model search filters case insensitively');
+ assert(html.includes('data-pick="custom-open"')&&html.includes('data-pick="refresh-models"'),'provider actions remain available for matched models');
+ html=modelMenuHTML('chatgpt');assert(html.includes('data-m="model-a"')&&html.includes('data-m="model-b"'),'provider name shows its models');
+ html=modelMenuHTML('gemini');assert(html.includes('사용 일시 중지')&&!html.includes('data-p="gemini" data-m='),'search does not unlock a provider');
+ html=modelMenuHTML('<missing>');assert(html.includes('검색 결과가 없어요')&&html.includes('일부 목록을 불러오지 못했어요')&&!html.includes('<missing>'),'missing results report failed discovery and do not inject query');
+ S.modelFetch.ollama.error='';html=modelMenuHTML('missing');assert(html.includes('모델 ID를 직접 입력'),'no results explains how to enter a model manually');
+ S.modelFetch.ollama.loading=true;html=modelMenuHTML('missing');assert(html.includes('모델 불러오는 중'),'pending discovery is not reported as a final empty result');S.modelFetch.ollama.loading=false;
  await loadProviderModels(chat);assert.equal(calls.length,2,'fresh cache avoids duplicate requests');
  await loadProviderModels(chat,true);assert.equal(calls.length,3,'manual refresh fetches');
  html=approvalHTML({id:'abc',tool:'search_sessions',arguments:{query:'<private>'}});

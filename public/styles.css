@@ -419,6 +419,8 @@ dialog.wide:not([open]){display:none}
 .pv-body .blank{padding:80px 20px}
 
 .pop{position:fixed;z-index:50;min-width:220px;max-width:320px;max-height:min(460px,70vh);overflow-y:auto;background:var(--fg-1);border-radius:var(--radius-10);box-shadow:var(--shadow-2);padding:var(--space-4);animation:rise .18s var(--ease-smooth)}
+.pop .model-search{position:sticky;top:-4px;z-index:1;padding:4px;background:var(--fg-1)}
+.pop .model-search input{width:100%;min-height:34px;padding:6px 9px;border-radius:var(--radius-6)}
 .pop .grp{padding:8px 8px 4px;font:500 14px/20px var(--font-sans);color:var(--text-3);display:flex;align-items:center;gap:6px}
 .pop .grp .badge{margin-left:auto}
 .pop .opt{display:flex;align-items:center;gap:var(--space-8);width:100%;min-height:30px;padding:5px 8px;border-radius:var(--radius-6);text-align:left;font:400 14px/20px var(--font-sans);color:var(--text-1)}
