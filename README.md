@@ -1,6 +1,6 @@
 # Naru
 
-개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정 로그인과 로컬·클라우드 모델 서버를 함께 연결합니다. 화면은 Defined 스타일의 검은 바탕과 컬러 하프톤을 사용하고, ego(lite) 움직임과 [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
+개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·OpenRouter 계정과 로컬·클라우드 모델 서버를 연결합니다. Gemini·GitHub Copilot CLI 계정 실행은 현재 일시 중지 중입니다. 화면은 Defined 스타일의 검은 바탕과 컬러 하프톤을 사용하고, ego(lite) 움직임과 [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
 
 ## 다운로드
 
@@ -30,13 +30,14 @@ npm run web        # 브라우저용: http://127.0.0.1:4317
 | --- | --- | --- |
 | ChatGPT | 공식 Codex CLI 로그인 | `npm install -g @openai/codex` |
 | Claude | 공식 Claude Code CLI 로그인 (Pro·Max 구독) | `npm install -g @anthropic-ai/claude-code` |
-| Gemini | 공식 Gemini CLI의 Google 로그인 | `npm install -g @google/gemini-cli` |
-| GitHub Copilot | 공식 Copilot CLI 로그인 | `npm install -g @github/copilot` |
+| Gemini | CLI 계정 실행 일시 중지; Gemini API 연결 사용 | API 키 |
+| GitHub Copilot | CLI 계정 실행 일시 중지 | 격리 검증 필요 |
 | OpenRouter | OAuth PKCE. 발급된 키는 macOS 키체인에 저장 | 없음 |
 
 - CLI가 없으면 *설치 명령 복사* 버튼이 나옵니다. 로그인 버튼은 터미널이나 브라우저에서 공식 로그인을 시작하고, 끝나면 Naru가 자동으로 확인합니다.
 - 계정 연결의 대화 모드는 CLI의 도구·MCP·세션 저장을 끄고 답만 받습니다. 에이전트 모드에서 CLI는 도구 *계획*만 내고, 파일 쓰기·수정·명령은 Naru의 승인 흐름을 거쳐 Naru가 실행합니다.
 - Claude Code가 `ANTHROPIC_API_KEY`를 보고 있으면 구독 대신 API 과금이 될 수 있어, Naru는 이 변수를 CLI에 넘기지 않습니다.
+- Gemini·Copilot CLI 계정 실행은 CLI 자체의 도구와 MCP가 Naru 승인 흐름 밖에서 실행되는 것을 확실히 차단할 수 없어 일시 중지했습니다. Gemini는 API 연결을 사용할 수 있습니다. Claude CLI는 안전 모드를 사용하며 관리자 정책으로 강제된 훅은 예외일 수 있습니다.
 - 사용할 수 있는 모델과 사용량 한도는 각 계정의 요금제를 따릅니다.
 - Kimi Code는 비대화형 실행이 도구를 승인 없이 실행하는 구조라 계정 연결에 넣지 않았습니다. API 키로는 OpenAI 호환 연결에서 쓸 수 있습니다.
 
@@ -55,10 +56,11 @@ npm run web        # 브라우저용: http://127.0.0.1:4317
 ## 작업 방식
 
 - **대화**: 파일이나 명령을 건드리지 않습니다.
-- 모델 선택 메뉴는 지원되는 API 서버와 Codex에서 모델 목록을 자동으로 불러옵니다. Claude·Gemini·Copilot CLI는 자동 계정별 목록 대신 기본 모델 목록 또는 직접 입력을 사용합니다. 새로고침으로 다시 탐색할 수 있고, 연결되지 않은 로컬 서버는 상태를 표시합니다. ChatGPT 목록은 Codex 카탈로그이며 계정의 실제 모델 사용 권한은 요청 결과로 확인됩니다.
+- 모델 선택 메뉴는 지원되는 API 서버와 Codex에서 모델 목록을 자동으로 불러옵니다. Claude CLI는 자동 계정별 목록 대신 기본 모델 목록 또는 직접 입력을 사용합니다. 새로고침으로 다시 탐색할 수 있고, 연결되지 않은 로컬 서버는 상태를 표시합니다. ChatGPT 목록은 Codex 카탈로그이며 계정의 실제 모델 사용 권한은 요청 결과로 확인됩니다.
 - 에이전트 실행 시 작업 폴더 루트의 `AGENTS.md`, `CLAUDE.md`, `.hermes.md`, `.cursorrules`가 있으면 각 8KB 이하 내용을 프로젝트 지침으로 연결된 모델 제공자에 전달합니다. 일반 대화에서는 읽지 않으며 활동에 사용된 파일 이름이 표시됩니다.
-- 에이전트는 작업 목록을 기록하고, 이전 대화는 매번 승인받은 후 제한된 발췌만 검색할 수 있습니다. 승인한 발췌는 현재 모델 제공자에게 전달됩니다.
-- **에이전트**: 작업 폴더 안에서 `list_files`, `read_file`, `search_files`, `git_status`, `git_diff`, `write_file`, `edit_file`, `run_command`, 웹 읽기·검색을 씁니다. Git 변경 내용은 매번 승인 후 모델로 전달하며, 쓰기·수정·명령은 실행 전에 내용(수정은 줄 단위 비교)을 보여 주고 허용을 받습니다. *모두 허용*은 그 작업 안의 같은 종류만 다시 묻지 않습니다.
+- 에이전트는 작업 목록을 기록하고 이전 대화의 제한된 발췌를 검색할 수 있습니다. 검색 결과는 현재 모델 제공자에게 전달됩니다.
+- **에이전트**: `list_files`, `read_file`, `search_files`, `git_status`, `git_diff`, `write_file`, `edit_file`, `run_command`, 웹 읽기·검색을 씁니다. 설정의 **도구 승인**에서 매번 승인, 자동 승인, 전체 접근을 선택합니다. 기본값은 매번 승인이고 새 작업부터 변경된 설정이 적용됩니다. 자동 승인은 파일 변경과 터미널 명령을 자동 승인하며 이전 대화 검색과 Git 변경 조회는 따로 승인합니다. 전체 접근은 모든 도구를 자동 승인하고 파일 도구의 작업 폴더 제한을 해제합니다. 터미널 명령은 선택한 폴더 밖에서도 현재 사용자 권한으로 실행될 수 있습니다.
+- 공개 웹 페이지는 검증된 공개 IP에 직접 연결해 읽으며, 프록시가 반드시 필요한 네트워크에서는 실패할 수 있습니다. 브라우저 페이지 읽기는 내부망 리다이렉트·하위 요청을 격리하기 전까지 중지했습니다. Ego Lite 검색은 유지합니다.
 - 답 다시 받기, 실행 중지(⌘.), 끊긴 작업 이어서 실행, 대화 이름 바꾸기·삭제·마크다운 내보내기를 지원합니다.
 - 만든 파일은 오른쪽 패널(⌘J)에 모이고 미리보기, Finder에서 보기, 기본 앱으로 열기를 할 수 있습니다. 실행 파일 형식은 기본 앱으로 열지 않습니다.
 - ⌘K로 대화 제목과 본문까지 검색합니다. 텍스트 파일을 끌어다 놓아 첨부할 수 있습니다.

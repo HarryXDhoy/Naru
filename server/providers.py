@@ -672,6 +672,9 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
         raise ProviderError("Codex CLI가 설치되어 있지 않습니다.")
     if cancel.is_set():
         raise CancelledError("실행이 취소되었습니다.")
+    prompt = str(prompt)
+    if len(prompt.encode("utf-8")) > 8 * 1024 * 1024:
+        raise ProviderError("ChatGPT 입력이 8 MB 제한을 초과했습니다.")
     root = Path(workspace).expanduser().resolve()
     if not root.is_dir():
         raise ProviderError("작업 폴더가 존재하지 않습니다.")
@@ -692,9 +695,19 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
         env.pop(key, None)  # This provider specifically uses official cached OAuth.
     on_event("status", {"text": "ChatGPT 연결을 준비하고 있습니다."})
     process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", env=env, cwd=root, start_new_session=True, bufsize=1)
-    process.stdin.write(str(prompt)); process.stdin.close()
     inbox = queue.Queue()
     errors = []
+
+    def feed_stdin():
+        try:
+            process.stdin.write(str(prompt))
+        except (BrokenPipeError, OSError, ValueError):
+            pass
+        finally:
+            try:
+                process.stdin.close()
+            except (BrokenPipeError, OSError, ValueError):
+                pass
 
     def read_stdout():
         for line in process.stdout:
@@ -708,6 +721,8 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
 
     threading.Thread(target=read_stdout, daemon=True).start()
     threading.Thread(target=read_stderr, daemon=True).start()
+    feeder = threading.Thread(target=feed_stdin, daemon=True, name=f"naru-codex-input-{process.pid}")
+    feeder.start()
     text_by_id, order, usage = {}, [], {}
     deadline = time.monotonic() + 1800
     done, failed = False, None
@@ -762,7 +777,13 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
             elif kind in ("turn.failed", "error"):
                 err = event.get("error", event.get("message", "Codex 실행 오류"))
                 failed = _redact(err.get("message", err) if isinstance(err, dict) else err)
-        process.wait(timeout=5)
+        exit_deadline = min(deadline, time.monotonic() + 5)
+        while process.poll() is None:
+            if cancel.is_set():
+                raise CancelledError("실행이 취소되었습니다.")
+            if time.monotonic() >= exit_deadline:
+                raise ProviderError("Codex 프로세스가 응답 후 종료되지 않았습니다.")
+            cancel.wait(.1)
         if process.returncode != 0 or not done:
             raise ProviderError(failed or ("Codex 실행이 완료되지 않았습니다. " + _redact("\n".join(errors[-5:]))))
         content = "\n\n".join(text_by_id[i] for i in order if text_by_id[i])
@@ -773,6 +794,7 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
         return {"content": content, "usage": usage}
     finally:
         _kill_group(process)
+        feeder.join(timeout=1)
         for stream in (process.stdout, process.stderr):
             if stream:
                 stream.close()

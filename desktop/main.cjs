@@ -4,12 +4,15 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const { spawn, spawnSync } = require('node:child_process');
-const { externalUrl, localPath, openableFile, trustedSender } = require('./security.cjs');
+const { externalUrl, localPath, openableFile, trustedSender, validPreference } = require('./security.cjs');
 
 app.setName('Naru');
 const lock = app.requestSingleInstanceLock();
 let mainWindow, backend, backendOrigin = '', quitting = false;
 const projectRoot = path.resolve(__dirname, '..');
+const dataDir = process.env.NARU_DATA_DIR || path.join(os.homedir(), 'Desktop', 'Naru', 'data');
+const preferencesPath = path.join(dataDir, 'ui-preferences.json');
+let preferences = {};
 const additionalPaths = ['/opt/homebrew/bin', '/usr/local/bin', path.join(os.homedir(), '.local', 'bin'), '/usr/bin', '/bin'];
 const processPath = [...new Set([...(process.env.PATH || '').split(path.delimiter), ...additionalPaths])].filter(Boolean).join(path.delimiter);
 
@@ -31,7 +34,6 @@ function findPython() {
 }
 
 async function startBackend() {
-  const dataDir = process.env.NARU_DATA_DIR || path.join(os.homedir(), 'Desktop', 'Naru', 'data');
   const workspace = process.env.NARU_WORKSPACE || path.join(os.homedir(), 'Desktop', 'Naru', 'workspace');
   fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   fs.mkdirSync(workspace, { recursive: true });
@@ -65,6 +67,42 @@ function requireTrusted(event) {
 }
 
 function installBridge() {
+  try {
+    const fd = fs.openSync(preferencesPath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    let saved;
+    try {
+      const info = fs.fstatSync(fd);
+      if (!info.isFile() || info.size > 4096) throw new RangeError('Invalid UI preferences');
+      saved = JSON.parse(fs.readFileSync(fd, 'utf8'));
+    } finally { fs.closeSync(fd); }
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      for (const [key, value] of Object.entries(saved)) if (validPreference(key, value) && value !== null) preferences[key] = value;
+    }
+  } catch (error) {
+    if (!['ENOENT', 'ELOOP'].includes(error.code) && !(error instanceof SyntaxError) && !(error instanceof RangeError)) throw error;
+  }
+  ipcMain.on('naru:get-preference', (event, key) => {
+    try { requireTrusted(event); event.returnValue = validPreference(key, null) ? (preferences[key] ?? null) : null; }
+    catch { event.returnValue = null; }
+  });
+  ipcMain.on('naru:set-preference', (event, key, value) => {
+    let temp, ownsTemp = false;
+    try {
+      requireTrusted(event);
+      if (!validPreference(key, value)) throw new Error('Invalid preference');
+      const next = { ...preferences };
+      if (value === null) delete next[key]; else next[key] = value;
+      temp = path.join(dataDir, `.ui-preferences-${process.pid}-${require('node:crypto').randomUUID()}.tmp`);
+      const fd = fs.openSync(temp, 'wx', 0o600); ownsTemp = true;
+      try { fs.writeFileSync(fd, JSON.stringify(next)); } finally { fs.closeSync(fd); }
+      fs.renameSync(temp, preferencesPath);
+      preferences = next;
+      event.returnValue = true;
+    } catch {
+      if (ownsTemp) { try { fs.unlinkSync(temp); } catch {} }
+      event.returnValue = false;
+    }
+  });
   ipcMain.handle('naru:choose-directory', async event => {
     requireTrusted(event);
     const result = await dialog.showOpenDialog(mainWindow, { title: 'Naru에서 사용할 폴더 선택', properties: ['openDirectory', 'createDirectory'] });

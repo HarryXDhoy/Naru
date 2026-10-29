@@ -8,5 +8,7 @@ contextBridge.exposeInMainWorld('naruDesktop', Object.freeze({
   openPath: (path) => ipcRenderer.invoke('naru:open-path', path),
   openExternal: (url) => ipcRenderer.invoke('naru:open-external', url),
   setTheme: (theme) => ipcRenderer.invoke('naru:set-theme', theme),
+  getPreference: (key) => ipcRenderer.sendSync('naru:get-preference', key),
+  setPreference: (key, value) => ipcRenderer.sendSync('naru:set-preference', key, value),
   version: () => ipcRenderer.invoke('naru:version')
 }));

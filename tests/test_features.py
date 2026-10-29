@@ -1,5 +1,5 @@
 """Regressions for Naru 0.2 capabilities: editing, search, allow-all, regenerate, live text, accounts."""
-import json, sys, tempfile, threading, time, unittest
+import json, os, sys, tempfile, threading, time, unittest
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'server'))
@@ -64,6 +64,20 @@ class FeatureTests(unittest.TestCase):
         result = self.tool('search_files', query='todo')
         self.assertEqual(result['matches'], [{'path': 'a.txt', 'line': 2, 'text': 'TODO fix'}])
 
+    def test_search_files_skips_fifo_and_outside_symlink(self):
+        work = self.root / 'work'; (work / 'ok.txt').write_text('needle')
+        os.mkfifo(work / 'pipe')
+        outside = self.root / 'outside.txt'; outside.write_text('needle secret')
+        (work / 'link').symlink_to(outside)
+        result = []; errors = []
+        def run_search():
+            try: result.append(self.tool('search_files', query='needle'))
+            except Exception as exc: errors.append(exc)
+        worker = threading.Thread(target=run_search, daemon=True); worker.start(); worker.join(2)
+        self.assertFalse(worker.is_alive(), 'search must not block on a FIFO')
+        self.assertEqual(errors, [])
+        self.assertEqual([m['path'] for m in result[0]['matches']], ['ok.txt'])
+
     def test_approve_all_skips_later_prompts_in_same_run(self):
         calls = [dict(content='', tool_calls=[dict(id='1', name='write_file', arguments={'path': 'a.txt', 'content': 'a'})], usage={}),
                  dict(content='', tool_calls=[dict(id='2', name='write_file', arguments={'path': 'b.txt', 'content': 'b'})], usage={}),
@@ -89,6 +103,23 @@ class FeatureTests(unittest.TestCase):
             wait_until(lambda: self.rt.store.get('runs', rid)['status'] == 'completed')
         messages = self.rt.store.where('messages', 'session_id', 's')
         self.assertEqual([(m['role'], m['content']) for m in messages], [('user', 'hello'), ('assistant', 'second')])
+
+    def test_regenerate_preserves_existing_answer_when_start_or_inference_fails(self):
+        self.rt.message('s', 'user', 'hello')
+        self.rt.message('s', 'assistant', 'original')
+        with self.assertRaises(ValueError):
+            self.rt.regenerate('s', {'provider_id': 'missing'})
+        self.assertEqual(self.rt.store.where('messages','session_id','s')[-1]['content'], 'original')
+        with patch.object(app.providers, 'complete', side_effect=RuntimeError('connection failed')):
+            rid=self.rt.regenerate('s')['run_id']
+            wait_until(lambda: self.rt.store.get('runs',rid)['status']=='failed')
+            wait_until(lambda: not self.rt.controls)
+        self.assertEqual(self.rt.store.where('messages','session_id','s')[-1]['content'], 'original')
+        with patch.object(app.providers, 'complete', return_value={'content':'replacement','tool_calls':[], 'usage':{}}):
+            new=self.rt.start('s',{},resume=rid)['run_id']
+            wait_until(lambda: self.rt.store.get('runs',new)['status']=='completed')
+        messages=self.rt.store.where('messages','session_id','s')
+        self.assertEqual([(m['role'],m['content']) for m in messages],[('user','hello'),('assistant','replacement')])
 
     def test_live_text_is_buffered_not_one_row_per_token(self):
         gate = threading.Event()

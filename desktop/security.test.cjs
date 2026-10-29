@@ -35,3 +35,10 @@ test('IPC sender must match the exact ephemeral backend origin', () => {
   assert.equal(trustedSender(sender('https://example.com'), origin), false);
   assert.equal(trustedSender({}, origin), false);
 });
+test('persistent UI preferences accept only bounded known values', () => {
+  const { validPreference } = require('./security.cjs');
+  for (const [key, value] of [['theme', 'light'], ['theme', 'dark'], ['theme', 'system'], ['drawer', '1'], ['side', '0'], ['session', '0123ab-cd']]) assert.equal(validPreference(key, value), true);
+  for (const [key, value] of [['theme', 'blue'], ['drawer', 'true'], ['side', '2'], ['session', '../a'], ['session', 'a'.repeat(129)], ['token', 'secret'], ['__proto__', 'x'], ['theme', {}]]) assert.equal(validPreference(key, value), false);
+  assert.equal(validPreference('session', null), true);
+  assert.equal(validPreference('unknown', null), false);
+});

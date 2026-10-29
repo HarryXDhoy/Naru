@@ -32,4 +32,13 @@ function trustedSender(event, expectedOrigin) {
   catch { return false; }
 }
 
-module.exports = { externalUrl, localPath, openableFile, trustedSender };
+function validPreference(key, value) {
+  if (value === null) return ['theme', 'side', 'drawer', 'session'].includes(key);
+  if (typeof value !== 'string') return false;
+  if (key === 'theme') return ['light', 'dark', 'system'].includes(value);
+  if (key === 'side' || key === 'drawer') return value === '0' || value === '1';
+  if (key === 'session') return /^[a-zA-Z0-9_-]{1,128}$/.test(value);
+  return false;
+}
+
+module.exports = { externalUrl, localPath, openableFile, trustedSender, validPreference };

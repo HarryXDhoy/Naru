@@ -118,6 +118,27 @@ class SafetyTests(unittest.TestCase):
         target.unlink();folder.rmdir();folder.symlink_to(outside,target_is_directory=True)
         with self.assertRaises(ValueError):self.rt.artifact_bytes(a)
 
+    def test_subprocess_unread_stdin_does_not_block_cancel_or_timeout(self):
+        code='import time; time.sleep(10)'
+        payload='x'*1_000_000
+        cancel=threading.Event();timer=threading.Timer(.2,cancel.set);timer.start()
+        started=time.monotonic()
+        try:
+            with self.assertRaisesRegex(InterruptedError,'취소'):
+                self.rt.process([sys.executable,'-c',code],payload,cancel,5)
+        finally:timer.cancel()
+        self.assertLess(time.monotonic()-started,3)
+        started=time.monotonic()
+        with self.assertRaisesRegex(InterruptedError,'시간 제한'):
+            self.rt.process([sys.executable,'-c',code],payload,threading.Event(),.2)
+        self.assertLess(time.monotonic()-started,3)
+        self.assertEqual(self.rt.process([sys.executable,'-c','import sys;print(len(sys.stdin.read()))'],payload,threading.Event(),5).strip(),'1000000')
+
+    def test_browser_process_can_read_stderr_result_without_changing_shell_output(self):
+        cmd=[sys.executable,'-c', 'import sys;sys.stdin.read();sys.stderr.write(' + repr('[{"title":"ok"}]') + ')']
+        self.assertEqual(self.rt.process(cmd,'input',threading.Event(),5),'')
+        self.assertEqual(self.rt.process(cmd,'input',threading.Event(),5,stderr_result=True),'[{"title":"ok"}]')
+
     def test_subprocess_output_cap_stops_noisy_command(self):
         code='import os,time; os.write(1,b"x"*1500000); time.sleep(4)'
         started=time.monotonic()
@@ -133,6 +154,19 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(self.rt.store.all('memories'),[])
         code,data=self.request('POST','/api/memories',{'content':'explicit note'},{'X-Naru-Token':self.rt.csrf,'Origin':f'http://127.0.0.1:{port}'})
         self.assertEqual(code,200);self.assertEqual(data['content'],'explicit note')
+
+    def test_browser_read_is_disabled_even_for_resumed_calls(self):
+        self.assertNotIn('browser_read',[t['function']['name'] for t in app.TOOLS])
+        with self.assertRaisesRegex(ValueError,'비활성화'):
+            self.rt.execute_tool({'settings':self.rt.settings(),'session_id':self.sid},'browser_read',{'url':'https://example.com'},threading.Event())
+
+    def test_settings_failure_preserves_previous_configuration(self):
+        self.start_http();original=self.rt.settings()
+        blocked=self.root/'not-a-directory';blocked.write_text('file')
+        code,data=self.request('POST','/api/settings',{'workspace':str(blocked/'child'),'max_steps':2},{'X-Naru-Token':self.rt.csrf})
+        self.assertEqual(code,400)
+        self.assertIn('작업 폴더',data['error'])
+        self.assertEqual(self.rt.settings(),original)
 
     def test_approval_decision_is_atomic_and_expired_run_is_rejected(self):
         self.start_http();self.run_record(status='awaiting_approval')

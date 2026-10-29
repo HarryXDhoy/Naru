@@ -326,6 +326,7 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .item .txt{flex:1;min-width:0}
 .item .txt .name{display:flex;align-items:center;gap:var(--space-8);font:500 14px/20px var(--font-sans)}
 .item .txt span.sub{display:block;color:var(--text-3);font:400 13px/18px var(--font-sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.item .txt span.sub.block-detail{white-space:normal;overflow:visible}
 .item .txt .bad{color:var(--danger);white-space:normal}
 .item .txt .ok{color:var(--badge-done-fg)}
 .item .txt code{font:12px/18px var(--font-mono);background:var(--bg-4);border-radius:var(--radius-4);padding:1px 6px;color:var(--text-2)}
@@ -357,6 +358,7 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .field{display:flex;flex-direction:column;gap:var(--space-6);min-width:0}
 .field>label,.field>.label{font:500 13px/19px var(--font-sans);color:var(--text-2)}
 .field .hint{font:400 13px/18px var(--font-sans);color:var(--text-3)}
+.field .hint p{margin:6px 0 0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-16)}
 .inrow{display:flex;gap:var(--space-8);align-items:center}
 .inrow>input{flex:1}

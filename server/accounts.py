@@ -93,7 +93,7 @@ def models(provider):
     return list(SPECS[provider["kind"]]["models"])
 
 
-def status(kind):
+def _account_status(kind):
     spec = SPECS[kind]
     binary = executable(kind)
     if not binary:
@@ -129,9 +129,24 @@ def status(kind):
     return {"available": False, "authenticated": False, "message": ""}
 
 
+CLI_EXECUTION_BLOCKED = {"gemini_cli", "copilot_cli"}
+
+
+def _blocked_message(kind):
+    alternative = "Gemini API 키 연결을 사용하세요." if kind == "gemini_cli" else "다른 모델 제공자의 API 연결을 사용하세요."
+    return f"{SPECS[kind]['name']} CLI 계정 연결은 도구 격리 검증이 완료될 때까지 일시 중지되었습니다. {alternative}"
+
+
+def status(kind):
+    result = _account_status(kind)
+    if kind in CLI_EXECUTION_BLOCKED:
+        result = dict(result, execution_blocked=True, message=_blocked_message(kind))
+    return result
+
+
 def test(provider):
     st = status(provider["kind"])
-    return {"ok": st["authenticated"], "models": models(provider), "message": st["message"]}
+    return {"ok": st["authenticated"] and not st.get("execution_blocked"), "models": models(provider), "message": st["message"]}
 
 
 def start_login(kind):
@@ -222,7 +237,13 @@ def _run(args, stdin_text, cwd, env, cancel, on_text, timeout=1800):
             if item is None:
                 break
             on_text(item)
-        process.wait(timeout=10)
+        exit_deadline = min(deadline, time.monotonic() + 10)
+        while process.poll() is None:
+            if cancel.is_set():
+                raise InterruptedError("실행이 취소되었습니다.")
+            if time.monotonic() >= exit_deadline:
+                raise AccountError("계정 CLI가 응답 후 종료되지 않았습니다.")
+            cancel.wait(.1)
         return process.returncode, "\n".join(e for e in errors if e)[-2000:]
     finally:
         _kill(process)
@@ -306,7 +327,7 @@ def _explain(kind, text):
 
 
 def _claude_args(binary, system_file, model, extra):
-    args = [binary, "-p", "--tools", "", "--disallowedTools", "mcp__*", "--strict-mcp-config", "--no-session-persistence", "--system-prompt-file", system_file]
+    args = [binary, "-p", "--safe-mode", "--tools", "", "--disallowedTools", "mcp__*", "--strict-mcp-config", "--no-session-persistence", "--system-prompt-file", system_file]
     if model and str(model).strip():
         args += ["--model", str(model).strip()]
     return args + extra
@@ -314,6 +335,8 @@ def _claude_args(binary, system_file, model, extra):
 
 def _invoke(provider, messages, on_delta, cancel, plan=False, tools=None, max_tokens=4096):
     kind = provider["kind"]
+    if kind in CLI_EXECUTION_BLOCKED:
+        raise AccountError(_blocked_message(kind))
     binary = executable(kind)
     if not binary:
         raise AccountError(f"{SPECS[kind]['name']} CLI가 없습니다. {SPECS[kind]['install']} 로 설치하세요.")

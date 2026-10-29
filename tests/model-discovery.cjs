@@ -17,6 +17,11 @@ S.data={providers:[chat,local],accounts:{codex:{available:true,authenticated:tru
  assert(html.includes('my-current-model') && html.includes('model-a'));
  assert(html.includes('서버에 연결되지 않아요') && html.includes('계정 사용 가능 여부는 실행 시 확인'));
  assert(html.includes('모델 목록 새로고침'));
+ S.data.providers.push({id:'gemini',kind:'gemini_cli',name:'Gemini'});
+ S.accounts.gemini_cli={available:true,authenticated:true,execution_blocked:true,message:'CLI account paused'};
+ html=modelMenuHTML();
+ assert(html.includes('사용 일시 중지'),'blocked account is not presented as available');
+ assert(!html.includes('data-p="gemini" data-m='),'blocked account models cannot be selected');
  await loadProviderModels(chat);assert.equal(calls.length,2,'fresh cache avoids duplicate requests');
  await loadProviderModels(chat,true);assert.equal(calls.length,3,'manual refresh fetches');
  html=approvalHTML({id:'abc',tool:'search_sessions',arguments:{query:'<private>'}});

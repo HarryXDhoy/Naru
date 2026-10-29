@@ -93,16 +93,17 @@ function startHero(box){
  h.mq=matchMedia('(prefers-color-scheme: dark)');h.mq.addEventListener?.('change',h.recolor);
  box.classList.add('live');size();h.recolor();h.kick();
 }
-const pref={get(k,d){try{const v=localStorage.getItem('naru.'+k);return v===null?d:v;}catch{return d;}},set(k,v){try{v==null?localStorage.removeItem('naru.'+k):localStorage.setItem('naru.'+k,String(v));}catch{}}};
+const pref={get(k,d){try{const native=window.naruDesktop?.getPreference?.(k);if(native!=null)return native;const v=localStorage.getItem('naru.'+k);if(v!==null)window.naruDesktop?.setPreference?.(k,v);return v===null?d:v;}catch{return d;}},set(k,v){try{v=v==null?null:String(v);if(window.naruDesktop?.setPreference?.(k,v)===false)toast('화면 설정을 저장하지 못했어요. 앱 데이터 폴더 권한을 확인하세요.',true);v===null?localStorage.removeItem('naru.'+k):localStorage.setItem('naru.'+k,v);}catch{}}};
 const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',skillIds:[],drafts:{},files:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
 
 // ---------- utilities ----------
 let toastTimer;
 function toast(msg,bad=false){const t=$('toast');if(!t)return;t.textContent=msg;t.classList.toggle('bad',bad);t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),bad?6500:3200);}
-async function api(path,{method='GET',body}={}){
+async function api(path,{method='GET',body,timeout}={}){
  const headers={Accept:'application/json'};
  if(method!=='GET'){headers['Content-Type']='application/json';headers['X-Naru-Token']=S.data?.csrf_token||'';}
- let res;try{res=await fetch(path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin'});}catch{throw new Error('Naru 로컬 서버에 연결할 수 없어요. 앱을 다시 열어 주세요.');}
+ const signal=timeout&&globalThis.AbortSignal?.timeout?AbortSignal.timeout(timeout):undefined;
+ let res;try{res=await fetch(path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),credentials:'same-origin',signal});}catch{throw new Error('Naru 로컬 서버에 연결할 수 없어요. 앱을 다시 열어 주세요.');}
  let data;try{data=await res.json();}catch{throw new Error(`서버 응답을 읽지 못했어요 (${res.status}).`);}
  if(!res.ok)throw new Error(data.error||`요청이 실패했어요 (${res.status}).`);
  return data;
@@ -392,11 +393,11 @@ function renderDrawer(){
 function ensureProvider(){
  if(providerById(S.providerId))return;
  const a=S.accounts||S.data?.accounts||{};
- const ready=providers().find(p=>p.kind==='codex'&&a.codex?.authenticated)||providers().find(p=>isAccount(p)&&accountOf(p)?.authenticated)||providers().find(p=>p.model)||providers()[0];
+ const ready=providers().find(p=>p.kind==='codex'&&a.codex?.authenticated)||providers().find(p=>isAccount(p)&&accountOf(p)?.authenticated&&!accountOf(p)?.execution_blocked)||providers().find(p=>p.model&&!accountOf(p)?.execution_blocked)||providers().find(p=>!accountOf(p)?.execution_blocked);
  S.providerId=ready?.id||'';S.model=ready?.model||'';
 }
-async function refreshState(){
- const d=await api('/api/state');
+async function refreshState(timeout){
+ const d=await api('/api/state',{timeout});
  S.data=d;if(d.accounts)S.accounts=d.accounts;
  ensureProvider();
  S.skillIds=S.skillIds.filter(id=>enabledSkills().some(s=>String(s.id)===id));
@@ -413,9 +414,9 @@ async function selectSession(id){
 }
 function newChat(){S.epoch++;S.view='chat';S.sid=null;S.detail=null;S.live='';remember(null);closePop();closeSide();renderAll();$('input')?.focus();}
 let lastFull=0;
-async function loadDetail(){
+async function loadDetail(timeout){
  const sid=S.sid,epoch=S.epoch;if(!sid)return;
- const d=await api(`/api/sessions/${enc(sid)}`);
+ const d=await api(`/api/sessions/${enc(sid)}`,{timeout});
  if(sid!==S.sid||epoch!==S.epoch)return;
  const before=latestRun();lastFull=Date.now();
  S.detail=d;S.live=d.live?.text||'';
@@ -436,24 +437,28 @@ function onTransition(before,after){
 function notify(title,body){try{if(document.hasFocus()||!('Notification' in window)||Notification.permission!=='granted')return;new Notification(title,{body});}catch{}}
 function askNotify(){try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});}catch{}}
 async function send(){
- const input=$('input');const text=(input?.value||'').trim(),files=attachments();
+ const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
  if((!text&&!files.length)||S.sending||runActive())return;
  const p=provider();
  if(!p){go('models');toast('먼저 모델을 연결하세요.');return;}
  const acct=accountOf(p);
+ if(isAccount(p)&&acct?.execution_blocked){go('models');toast(acct.message||'이 계정 연결은 사용할 수 없습니다. API 연결을 이용하세요.',true);return;}
  if(isAccount(p)&&acct&&acct.available===false){go('models');toast(`${p.name} CLI를 먼저 설치하세요.`,true);return;}
  if(isAccount(p)&&acct&&!acct.authenticated){go('models');toast(`${p.name} 로그인이 필요해요.`,true);return;}
  if(!isAccount(p)&&!S.model&&!p.model){modelMenu();toast('사용할 모델을 고르세요.');return;}
  let content=text;
  if(files.length)content=(text||'첨부한 파일을 검토해 줘.')+ATTACH_HEAD+files.map(f=>`\n--- 첨부: ${f.name} ---\n${f.text}\n--- 첨부 끝 ---`).join('\n');
  if(content.length>100000){toast('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.',true);return;}
- const epoch=S.epoch,key=draftKey();S.sending=true;renderTools();
+ const epoch=S.epoch,key=draftKey(),model=S.model,mode=S.mode,skillIds=selectedSkills().map(s=>s.id);S.sending=true;renderTools();
  try{
   let sid=S.sid;
-  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model:S.model,mode:S.mode}});sid=s.id;if(S.epoch===epoch){S.sid=sid;remember(sid);}}
-  await api(`/api/sessions/${enc(sid)}/messages`,{method:'POST',body:{content,provider_id:p.id,model:S.model,mode:S.mode,skill_ids:selectedSkills().map(s=>s.id)}});
-  delete S.drafts[key];delete S.files[key];delete S.drafts[sid];delete S.files[sid];
-  if(S.epoch===epoch&&S.sid===sid&&$('input')){$('input').value='';autosize();renderChips();}
+  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode}});sid=s.id;if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}S.sid=sid;remember(sid);}}
+  await api(`/api/sessions/${enc(sid)}/messages`,{method:'POST',body:{content,provider_id:p.id,model,mode,skill_ids:skillIds}});
+  if(S.drafts[key]===rawText)delete S.drafts[key];
+  if(S.files[key]===files)delete S.files[key];
+  if(key!==sid&&S.drafts[sid]===rawText)delete S.drafts[sid];
+  if(key!==sid&&S.files[sid]===files)delete S.files[sid];
+  if(S.epoch===epoch&&S.sid===sid&&$('input')){if($('input').value===rawText)$('input').value='';autosize();renderChips();}
   S.data.active={...(S.data.active||{}),[sid]:'running'};
   if(S.epoch===epoch&&S.sid===sid)await loadDetail();
   refreshState().then(()=>renderSide()).catch(()=>{});
@@ -484,8 +489,8 @@ function modelOptions(p){
 function modelMenuHTML(){
  const parts=[];
  for(const p of providers()){
-  const acct=isAccount(p)?accountOf(p):null,locked=acct&&(!acct.available||!acct.authenticated),state=S.modelFetch[p.id]||{};
-  parts.push(`<div class="grp">${esc(p.name)}${locked?(acct.available?'<span class="badge attention">로그인 필요</span>':'<span class="badge neutral">설치 필요</span>'):''}</div>`);
+  const acct=isAccount(p)?accountOf(p):null,locked=acct&&(acct.execution_blocked||!acct.available||!acct.authenticated),state=S.modelFetch[p.id]||{};
+  parts.push(`<div class="grp">${esc(p.name)}${locked?(acct.execution_blocked?'<span class="badge attention">사용 일시 중지</span>':acct.available?'<span class="badge attention">로그인 필요</span>':'<span class="badge neutral">설치 필요</span>'):''}</div>`);
   if(locked){parts.push(`<button type="button" class="opt dim" data-pick="go-models">${icon('key')}<span>연결하러 가기</span></button>`);continue;}
   for(const m of modelOptions(p)){const on=String(p.id)===String(S.providerId)&&(S.model||'')===(m||'');parts.push(`<button type="button" class="opt" role="menuitemradio" aria-checked="${on}" data-pick="m" data-p="${esc(p.id)}" data-m="${esc(m)}"><span>${esc(m||'기본 모델')}</span>${on?icon('check','tick'):''}</button>`);}
   if(state.loading)parts.push('<div class="loading"><span class="spinner"></span>모델 불러오는 중</div>');
@@ -521,7 +526,7 @@ async function loadProviderModels(p,force=false){
 function discoverModels(force=false){
  for(const p of providers()){
   const a=isAccount(p)?accountOf(p):null;
-  if(isAccount(p)&&(!a||!a.available||!a.authenticated))continue;
+  if(isAccount(p)&&(!a||a.execution_blocked||!a.available||!a.authenticated))continue;
   loadProviderModels(p,force);
  }
 }
@@ -675,10 +680,11 @@ function renderModels(){
  const acct=([key,name])=>{
   const st=a?.[key];let badge='',sub='',act='';
   if(!st)badge='<span class="spinner" role="img" aria-label="확인하는 중"></span>';
+  else if(st.execution_blocked){badge='<span class="badge attention">사용 일시 중지</span>';sub=esc(st.message||'CLI 계정 연결은 일시 중지되었습니다. API 연결을 이용하세요.');act='<button type="button" class="btn sm" data-act="add-provider">API 연결 추가</button>';}
   else if(key!=='openrouter'&&!st.available){badge='<span class="badge neutral">설치 필요</span>';sub=st.install?`<code>${esc(st.install)}</code>`:'';act=`<button type="button" class="btn sm" data-act="copy-install" data-id="${key}">${icon('copy')}설치 명령 복사</button>`;}
   else if(!st.authenticated){badge='<span class="badge attention">로그인 필요</span>';act=`<button type="button" class="btn sm tint" data-act="account-login" data-id="${key}">로그인</button>`;}
   else{badge='<span class="badge done">연결됨</span>';if(/API 키|@/.test(st.message||''))sub=esc(st.message);act=`<button type="button" class="btn sm" data-act="account-use" data-id="${key}">대화 시작</button>${key==='openrouter'?iconBtn('retry','다시 로그인','account-login',key):''}`;}
-  return `<div class="item"><span class="glyph ${st?.authenticated?'live':''}" aria-hidden="true">${esc(name[0])}</span><div class="txt"><div class="name">${esc(name)}${badge}</div>${sub?`<span class="sub">${sub}</span>`:''}</div><div class="acts2">${act}</div></div>`;
+  return `<div class="item"><span class="glyph ${st?.authenticated&&!st?.execution_blocked?'live':''}" aria-hidden="true">${esc(name[0])}</span><div class="txt"><div class="name">${esc(name)}${badge}</div>${sub?`<span class="sub ${st?.execution_blocked?'block-detail':''}">${sub}</span>`:''}</div><div class="acts2">${act}</div></div>`;
  };
  const apis=providers().filter(p=>!ACCOUNT_KINDS.includes(p.kind)&&p.account!=='openrouter');
  const apiRow=p=>{const t=S.tests[p.id];const badge=!t?'':t.pending?'<span class="spinner" role="img" aria-label="확인하는 중"></span>':t.ok?'<span class="badge done">응답함</span>':'<span class="badge error">연결 안 됨</span>';
@@ -701,8 +707,13 @@ function renderSettings(){
  const picker=id=>desk?`<button type="button" class="btn" data-act="pick-folder" data-id="${id}" title="폴더 고르기">${icon('folder')}고르기</button>`:'';
  $('main').innerHTML=page('설정',`<form class="form" id="settings-form">
  <h2>화면</h2><div class="seg wide" role="group" aria-label="밝기">${[['system','시스템'],['light','밝게'],['dark','어둡게']].map(([k,n])=>`<button type="button" data-act="theme" data-id="${k}" aria-pressed="${theme===k}">${n}</button>`).join('')}</div>
- <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">에이전트는 이 폴더 안에서 파일을 읽고 바꿔요. 실행 시 루트의 프로젝트 지침 파일은 연결된 모델 제공자에 전달돼요.</span></div>
+ <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">실행 시 루트의 프로젝트 지침 파일은 연결된 모델 제공자에 전달돼요. 파일 접근 범위는 아래 도구 승인 설정에 따라 달라져요.</span></div>
  <div class="field"><label for="st-rp">보고서 폴더</label><div class="inrow"><input id="st-rp" name="report_directory" required value="${esc(x.report_directory)}">${picker('st-rp')}</div></div>
+ <h2>도구 승인</h2><div class="field"><label for="st-access">접근 권한</label><select id="st-access" name="access_mode" aria-describedby="st-access-help">${[['manual','매번 승인'],['auto_approve','자동 승인 (Approve for me)'],['full_access','전체 접근 (Full access)']].map(([k,n])=>`<option value="${k}"${(x.access_mode||'manual')===k?' selected':''}>${n}</option>`).join('')}</select><div id="st-access-help" class="hint">
+ <p><strong>매번 승인:</strong> 파일 쓰기·수정, 터미널 명령, 이전 대화 검색, Git 변경 조회 전에 승인해요.</p>
+ <p><strong>자동 승인:</strong> 작업·보고서 폴더의 파일 쓰기·수정과 터미널 명령을 자동 승인해요. 이전 대화 검색과 Git 변경 조회는 각각 승인해요.</p>
+ <p><strong>전체 접근:</strong> Naru의 파일 도구가 현재 macOS 사용자에게 허용된 모든 경로에 접근하며 모든 도구를 자동 승인해요. 이전 대화와 Git 변경 내용이 연결된 모델 제공자에게 전달될 수 있어요.</p>
+ <p>자동 승인과 전체 접근의 터미널 명령은 샌드박스 없이 현재 사용자 권한으로 실행되며, 선택한 폴더 밖의 파일도 읽거나 변경할 수 있어요. 설정은 새 작업부터 적용되고 진행 중이거나 재개하는 작업은 기존 권한을 유지해요.</p></div></div>
  <h2>실행</h2><div class="grid2"><div class="field"><label for="st-steps">한 번에 쓰는 도구 단계</label><input id="st-steps" name="max_steps" type="number" min="1" max="50" required value="${esc(x.max_steps||12)}"></div><div class="field"><label for="st-tok">최대 출력 토큰</label><input id="st-tok" name="max_output_tokens" type="number" min="256" max="32768" step="256" required value="${esc(x.max_output_tokens||4096)}"></div></div>
  <h2>모든 대화에 줄 지침</h2><div class="field"><label class="sr" for="st-sys">지침</label><textarea id="st-sys" name="system_prompt" rows="6">${esc(x.system_prompt||'')}</textarea></div>
  <div class="actions"><button type="submit" class="btn primary">저장</button></div></form>`);
@@ -718,6 +729,7 @@ async function accountLogin(key){
  S.watch=setInterval(async()=>{n++;try{S.accounts=await api('/api/accounts?refresh=1');if(S.accounts[key]?.authenticated){clearInterval(S.watch);await refreshState();toast(`${ACCOUNT_NAMES[key]} 연결됨`);}if(S.view==='models')renderModels();}catch{}if(n>75)clearInterval(S.watch);},4000);
 }
 async function accountUse(key){
+ if((S.accounts||S.data?.accounts)?.[key]?.execution_blocked){toast('이 계정 연결은 일시 중지되었어요. API 연결을 사용하세요.',true);return;}
  const p=await api(`/api/accounts/${enc(key)}/connect`,{method:'POST',body:{}});
  await refreshState();S.providerId=p.id;S.model=p.model||'';newChat();
 }
@@ -810,13 +822,13 @@ async function tick(){
  try{
   const sid=S.sid,epoch=S.epoch;
   if(S.view==='chat'&&sid&&S.detail&&runActive()){
-   const live=await api(`/api/sessions/${enc(sid)}/live`);
+   const live=await api(`/api/sessions/${enc(sid)}/live`,{timeout:10000});
    if(sid!==S.sid||epoch!==S.epoch)return;
    const run=latestRun();
-   if(!live.run_id||live.status!==run.status||(live.rev!==S.detail.rev&&Date.now()-lastFull>450))await loadDetail();
+   if(!live.run_id||live.status!==run.status||(live.rev!==S.detail.rev&&Date.now()-lastFull>450))await loadDetail(10000);
    else if(live.run_id===run.id&&live.text!==S.live){S.live=live.text;paintLive();}
   }
-  if(Object.keys(S.data.active||{}).length&&Date.now()-lastState>2200){lastState=Date.now();const before=JSON.stringify(S.data.active);await refreshState();if(JSON.stringify(S.data.active)!==before)renderSide();}
+  if(Object.keys(S.data.active||{}).length&&Date.now()-lastState>2200){lastState=Date.now();const before=JSON.stringify(S.data.active);await refreshState(10000);if(JSON.stringify(S.data.active)!==before)renderSide();}
  }catch{}finally{ticking=false;}
 }
 
@@ -834,7 +846,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,S};return;}
 setInterval(tick,280);
 boot();
 })();

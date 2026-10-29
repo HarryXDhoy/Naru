@@ -17,7 +17,7 @@ POST /api/providers {id?,name,kind,base_url,model,api_key?,clear_key?,tools_enab
 POST /api/providers/:id/test -> {ok,models,message} (no paid inference). GET /api/providers/:id/models -> {models}.
 
 ## Accounts (sign-in providers)
-GET /api/accounts[?refresh=1] -> {codex,claude_code,gemini_cli,copilot_cli,openrouter}: each {available,authenticated,message,install?}.
+GET /api/accounts[?refresh=1] -> {codex,claude_code,gemini_cli,copilot_cli,openrouter}: each {available,authenticated,message,install?,execution_blocked?}.
 POST /api/accounts/:kind/login -> {started:true, terminal?:true, url?}. CLI kinds open the official login (Terminal or browser); openrouter returns the OAuth PKCE url (S256, state, 15-minute expiry).
 GET /oauth/openrouter/callback?code&state -> small HTML page; exchanges the code at openrouter.ai/api/v1/auth/keys, stores the key in Keychain, creates provider {account:'openrouter',kind:'openai'}.
 POST /api/accounts/:kind/connect -> provider for that account (created on first use).
@@ -37,7 +37,8 @@ POST /api/runs/:id/cancel; POST /api/runs/:id/resume -> {run_id}; GET /api/runs/
 Event {id,run_id,type,data,created_at}; type status|note|delta|tool_call|tool_result|usage|error. Streamed text is buffered in memory and written as coalesced delta events, not one row per token.
 
 ## Tools and approvals
-Tools: list_files, read_file, search_files, git_status, git_diff, write_file (overwrite only when asked), edit_file (exact unique old_text, atomic, keeps file mode), run_command, fetch_url, browser_search, browser_read. All paths stay inside the workspace.
+Tools: list_files, read_file, search_files, git_status, git_diff, write_file (overwrite only when asked), edit_file (exact unique old_text, atomic, keeps file mode), run_command, fetch_url, browser_search. browser_read is disabled until browser requests can be isolated from private networks. File tools are restricted to configured workspace or report paths except in full_access mode. Shell commands run as the current OS user without a filesystem sandbox.
+Settings access_mode is manual (default), auto_approve (file changes and commands), or full_access (all tools). Access mode is captured for each new run; resumed pending actions require fresh approval.
 Approval {id,run_id,tool,arguments,status,created_at}. POST /api/approvals/:id {decision:'approve'|'approve_all'|'deny'}. approve_all adds the tool to the run's auto_approve list; later calls of that tool in the same run are recorded with data.auto=true.
 
 ## Artifacts, skills, memory
