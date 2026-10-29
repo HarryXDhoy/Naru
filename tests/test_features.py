@@ -190,7 +190,7 @@ class FeatureTests(unittest.TestCase):
         self.rt.port = 4999
         start = self.rt.openrouter_start()
         self.assertIn('code_challenge_method=S256', start['url'])
-        self.assertIn('callback_url=http%3A%2F%2Flocalhost%3A4999%2Foauth%2Fopenrouter%2Fcallback', start['url'])
+        self.assertIn('callback_url=http%3A%2F%2F127.0.0.1%3A4999%2Foauth%2Fopenrouter%2Fcallback%3Fstate%3D', start['url'])
 
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ const c={console,URL,JSON,Date,Intl,Number,String,Map,Set,Math,TextDecoder,Error
  document:{getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)},addEventListener(){},documentElement:{dataset:{},classList:{add(){}}},querySelector(){return null},querySelectorAll(){return []}},
  window:{addEventListener(){}},addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),localStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout,clearTimeout,setInterval(){},clearInterval(){},navigator:{},getComputedStyle:()=>({})};
 c.globalThis=c;c.window=Object.assign(c.window,c);
-let calls=[];c.fetch=async url=>{calls.push(url);if(url.includes('ollama'))throw Error('offline');return {ok:true,json:async()=>({models:['model-a','model-b','model-a']})}};
+let calls=[];c.fetch=async url=>{calls.push(url);if(url.includes('ollama'))return {ok:false,json:async()=>({error:'Ollama 서버를 시작해 주세요 <offline>'})};return {ok:true,json:async()=>({models:['model-a','model-b','model-a']})}};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8'),c);
 const {S,loadProviderModels,modelMenuHTML,approvalHTML,detailHTML}=c.NaruUI;
 const chat={id:'codex',kind:'codex',name:'ChatGPT'},local={id:'ollama',kind:'ollama',name:'Ollama'};
@@ -15,7 +15,8 @@ S.data={providers:[chat,local],accounts:{codex:{available:true,authenticated:tru
  assert.equal(S.model,'my-current-model');
  let html=modelMenuHTML();
  assert(html.includes('my-current-model') && html.includes('model-a'));
- assert(html.includes('서버에 연결되지 않아요') && html.includes('계정 사용 가능 여부는 실행 시 확인'));
+ assert(html.includes('Ollama 서버를 시작해 주세요 &lt;offline&gt;') && html.includes('계정 사용 가능 여부는 실행 시 확인'));
+ assert(!html.includes('<offline>'),'provider error messages are escaped');
  assert(html.includes('모델 목록 새로고침'));
  S.data.providers.push({id:'gemini',kind:'gemini_cli',name:'Gemini'});
  S.accounts.gemini_cli={available:true,authenticated:true,execution_blocked:true,message:'CLI account paused'};

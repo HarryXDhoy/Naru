@@ -77,6 +77,28 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(p.list_models(config),['gemini-test'])
         self.assertTrue(all(body is None for _,body,_ in self.server.requests))
 
+    def test_gemini_catalog_follows_pages_and_rejects_repeated_token(self):
+        config = self.provider('gemini')
+        pages = [
+            {'models':[{'name':'models/gemini-one','supportedGenerationMethods':['generateContent']}], 'nextPageToken':'next/+ token'},
+            {'models':[{'name':'models/gemini-two','supportedGenerationMethods':['generateContent']}, {'name':'models/embed','supportedGenerationMethods':['embedContent']}]},
+        ]
+        with patch.object(p, '_json_request', side_effect=pages) as request:
+            self.assertEqual(p.list_models(config), ['gemini-one', 'gemini-two'])
+            self.assertIn('pageToken=next%2F%2B+token', request.call_args.args[1])
+        with patch.object(p, '_json_request', return_value={'models':[], 'nextPageToken':'repeat'}):
+            with self.assertRaisesRegex(p.ProviderError, '다음 페이지'):
+                p.list_models(config)
+
+    def test_offline_local_model_server_explains_how_to_start_it(self):
+        error = p.urllib.error.URLError(ConnectionRefusedError('refused'))
+        ollama = {'kind':'ollama', 'base_url':'http://127.0.0.1:11434'}
+        studio = {'kind':'openai', 'name':'LM Studio · Local', 'base_url':'http://127.0.0.1:1234/v1'}
+        custom = {'kind':'openai', 'name':'Custom', 'base_url':'http://127.0.0.1:1234/v1'}
+        self.assertIn('Ollama', str(p._http_error(error, ollama)))
+        self.assertIn('Local Server', str(p._http_error(error, studio)))
+        self.assertNotIn('LM Studio', str(p._http_error(error, custom)))
+
     def test_openai_stream_tools_usage(self):
         self.server.events=[{'choices':[{'delta':{'content':'Checking '}}]}, {'choices':[{'delta':{'tool_calls':[{'index':0,'id':'c1','function':{'name':'read_file','arguments':'{"path":'}}]}}]}, {'choices':[{'delta':{'tool_calls':[{'index':0,'function':{'arguments':'"x.txt"}'}}]},'finish_reason':'tool_calls'}]}, {'choices':[],'usage':{'prompt_tokens':10,'completion_tokens':4}}, '[DONE]']
         out=self.run_complete('openai')

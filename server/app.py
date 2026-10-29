@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import providers
 import accounts
 
-VERSION='0.2.2'
+VERSION='0.2.3'
 TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings'}
 INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',)}
 ACTIVE=('running','awaiting_approval')
@@ -307,7 +307,7 @@ class Runtime:
         with self.lock:
             self.oauth_pending={k:v for k,v in self.oauth_pending.items() if time.monotonic()-v['t']<900}
             self.oauth_pending[state]={'verifier':verifier,'t':time.monotonic()}
-        callback=f'http://localhost:{self.port}/oauth/openrouter/callback'
+        callback=f'http://127.0.0.1:{self.port}/oauth/openrouter/callback?'+urlencode({'state':state})
         return {'started':True,'url':'https://openrouter.ai/auth?'+urlencode({'callback_url':callback,'code_challenge':challenge,'code_challenge_method':'S256','state':state,'key_label':'Naru'})}
     def openrouter_finish(self,code,state):
         with self.lock:pending=self.oauth_pending.pop(state or '',None)

@@ -544,7 +544,7 @@ async function loadProviderModels(p,force=false){
   S.modelFetch[id]={loading:false,at:Date.now(),error:''};
  }catch(err){
   if(!providerById(id)||S.modelFetch[id]!==requestState)return;
-  S.modelFetch[id]={loading:false,at:Date.now(),error:p.kind==='codex'?'ChatGPT 모델 목록을 불러오지 못했어요.':'서버에 연결되지 않아요'};
+  S.modelFetch[id]={loading:false,at:Date.now(),error:err.message||'모델 목록을 불러오지 못했어요.'};
  }finally{redrawModelMenu();}
 }
 function discoverModels(force=false){

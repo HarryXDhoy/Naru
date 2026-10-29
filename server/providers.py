@@ -104,6 +104,13 @@ def _http_error(error, provider):
             detail = "서버가 요청을 거절했습니다. 주소, 모델 이름과 인증 정보를 확인하세요."
         return ProviderError(f"모델 서버 HTTP {error.code}: {_redact(detail, provider)}")
     if isinstance(error, urllib.error.URLError):
+        if isinstance(error.reason, ConnectionRefusedError):
+            url = urllib.parse.urlsplit((provider or {}).get('base_url') or DEFAULT_URLS.get((provider or {}).get('kind'), ''))
+            if url.hostname in ('localhost', '127.0.0.1', '::1'):
+                if (provider or {}).get('kind') == 'ollama':
+                    return ProviderError('Ollama 서버에 연결할 수 없습니다. Ollama를 설치하고 실행한 다음 모델을 내려받아 주세요.')
+                if url.port == 1234 and 'lm studio' in str((provider or {}).get('name', '')).lower():
+                    return ProviderError('LM Studio 서버에 연결할 수 없습니다. LM Studio에서 모델을 불러오고 Local Server를 시작해 주세요.')
         return ProviderError("모델 서버에 연결하지 못했습니다: " + _redact(error.reason, provider))
     return ProviderError(_redact(error, provider))
 
@@ -263,12 +270,25 @@ def list_models(provider):
     kind = provider.get("kind", "openai")
     if kind == "codex":
         return codex_models()
+    if kind == "gemini":
+        names, token, seen = [], '', set()
+        for _ in range(20):
+            query = {'pageSize': 1000}
+            if token:
+                query['pageToken'] = token
+            data = _json_request(provider, '/models?' + urllib.parse.urlencode(query))
+            names.extend(m.get('name', '').removeprefix('models/') for m in data.get('models', []) if not m.get('supportedGenerationMethods') or 'generateContent' in m['supportedGenerationMethods'])
+            token = data.get('nextPageToken') or ''
+            if not token:
+                return sorted({x for x in names if isinstance(x, str) and x})
+            if not isinstance(token, str) or token in seen:
+                raise ProviderError('Gemini 모델 목록의 다음 페이지를 읽지 못했습니다.')
+            seen.add(token)
+        raise ProviderError('Gemini 모델 목록이 너무 길어 불러오기를 중단했습니다.')
     suffix = "/api/tags" if kind == "ollama" else "/models"
     data = _json_request(provider, suffix)
     if kind == "ollama":
         names = [m.get("name") or m.get("model") for m in data.get("models", [])]
-    elif kind == "gemini":
-        names = [m.get("name", "").removeprefix("models/") for m in data.get("models", []) if not m.get("supportedGenerationMethods") or "generateContent" in m["supportedGenerationMethods"]]
     else:
         names = [m.get("id") for m in data.get("data", [])]
     return sorted({x for x in names if isinstance(x, str) and x})
