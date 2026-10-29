@@ -37,7 +37,7 @@ POST /api/runs/:id/cancel; POST /api/runs/:id/resume -> {run_id}; GET /api/runs/
 Event {id,run_id,type,data,created_at}; type status|note|delta|tool_call|tool_result|usage|error. Streamed text is buffered in memory and written as coalesced delta events, not one row per token.
 
 ## Tools and approvals
-Tools: list_files, read_file, search_files, write_file (overwrite only when asked), edit_file (exact unique old_text, atomic, keeps file mode), run_command, fetch_url, browser_search, browser_read. All paths stay inside the workspace.
+Tools: list_files, read_file, search_files, git_status, git_diff, write_file (overwrite only when asked), edit_file (exact unique old_text, atomic, keeps file mode), run_command, fetch_url, browser_search, browser_read. All paths stay inside the workspace.
 Approval {id,run_id,tool,arguments,status,created_at}. POST /api/approvals/:id {decision:'approve'|'approve_all'|'deny'}. approve_all adds the tool to the run's auto_approve list; later calls of that tool in the same run are recorded with data.auto=true.
 
 ## Artifacts, skills, memory
@@ -56,3 +56,5 @@ platform, chooseDirectory(), revealPath(path), openPath(path), openExternal(url)
 ego(lite) Style tokens (grey surfaces, black-alpha text, hairline rings, pill controls, navy→blue-5 primary), Mona Sans bundled locally, Korean-first copy, one HeroHorizon WebGL2 scene on the empty chat screen with a CSS fallback and reduced-motion still frame. Status uses badges (실행 중, 확인 필요, 연결됨, 로그인 필요, 설치 필요). No decorative captions, eyebrows or keyboard hints in the layout; shortcuts live in tooltips.
 
 Dotted texture tokens and usage rules: [DOT-PATTERN.md](DOT-PATTERN.md).
+
+`git_status` and `git_diff` inspect the workspace Git root; `git_diff` requires fresh approval before changes reach the model.

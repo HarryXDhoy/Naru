@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "web": "python3 server/app.py --port 4317",
-    "test": "python3 -m unittest discover -s tests -v && node --test desktop/security.test.cjs && node tests/ui-interactions.cjs && node tests/model-discovery.cjs",
+    "test": "python3 -m unittest discover -s tests -v && node --test desktop/security.test.cjs && node tests/ui-interactions.cjs && node tests/model-discovery.cjs && node --test tests/hero-lifecycle.cjs",
     "package": "node scripts/package.cjs",
     "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --test desktop/security.test.cjs"
   },

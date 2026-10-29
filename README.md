@@ -1,10 +1,16 @@
 # Naru
 
-개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정 로그인과 로컬·클라우드 모델 서버를 함께 연결합니다. 화면은 ego(lite) Style 디자인 시스템을 따르며, [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
+개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정 로그인과 로컬·클라우드 모델 서버를 함께 연결합니다. 화면은 Defined 스타일의 검은 바탕과 컬러 하프톤을 사용하고, ego(lite) 움직임과 [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
+
+## 다운로드
+
+[GitHub Releases](https://github.com/HarryXDhoy/Naru/releases)에서 `Naru-macOS-Apple-Silicon.zip`을 받아 압축을 풀고 Naru.app을 실행하세요. Apple Silicon Mac 전용 빌드입니다. Python 3.10 이상은 따로 설치해야 하며 ChatGPT 계정을 사용하려면 공식 Codex CLI 설치와 로그인이 필요합니다. 로컬 모델은 Ollama 또는 LM Studio를 별도로 실행해야 합니다. 각자의 계정과 키로 연결하며 인증 정보는 배포 파일에 포함되지 않습니다.
+
+이 빌드는 Apple 개발자 서명과 공증을 받지 않아 macOS에서 실행을 차단하거나 경고할 수 있습니다. 다른 Mac에서의 동작은 아직 검증하지 않았습니다. Intel Mac과 Windows용 빌드는 제공하지 않습니다.
 
 ## 실행
 
-데스크탑 `Naru` 폴더에서 **`Launch Naru.command`**를 더블클릭하거나 **`dist/Naru-darwin-arm64/Naru.app`**을 여세요. GitHub에서 새로 받은 경우 빌드된 앱과 의존성은 포함되지 않으므로 먼저 아래 개발 실행 명령을 따르세요.
+데스크탑 `Naru` 폴더에서 **`Launch Naru.command`**를 더블클릭하거나 **`dist/Naru-darwin-arm64/Naru.app`**을 여세요. GitHub 소스 코드를 받은 경우 빌드된 앱과 의존성은 포함되지 않으므로 먼저 아래 개발 실행 명령을 따르세요.
 
 Python 3.10 이상과 표준 라이브러리 `sqlite3`를 사용합니다. Homebrew Python을 먼저 찾고, `/usr/local/bin/python3`, `/usr/bin/python3`, PATH 순서로 확인합니다. Python은 앱에 포함하지 않았습니다.
 
@@ -50,8 +56,9 @@ npm run web        # 브라우저용: http://127.0.0.1:4317
 
 - **대화**: 파일이나 명령을 건드리지 않습니다.
 - 모델 선택 메뉴는 지원되는 API 서버와 Codex에서 모델 목록을 자동으로 불러옵니다. Claude·Gemini·Copilot CLI는 자동 계정별 목록 대신 기본 모델 목록 또는 직접 입력을 사용합니다. 새로고침으로 다시 탐색할 수 있고, 연결되지 않은 로컬 서버는 상태를 표시합니다. ChatGPT 목록은 Codex 카탈로그이며 계정의 실제 모델 사용 권한은 요청 결과로 확인됩니다.
+- 에이전트 실행 시 작업 폴더 루트의 `AGENTS.md`, `CLAUDE.md`, `.hermes.md`, `.cursorrules`가 있으면 각 8KB 이하 내용을 프로젝트 지침으로 연결된 모델 제공자에 전달합니다. 일반 대화에서는 읽지 않으며 활동에 사용된 파일 이름이 표시됩니다.
 - 에이전트는 작업 목록을 기록하고, 이전 대화는 매번 승인받은 후 제한된 발췌만 검색할 수 있습니다. 승인한 발췌는 현재 모델 제공자에게 전달됩니다.
-- **에이전트**: 작업 폴더 안에서 `list_files`, `read_file`, `search_files`, `write_file`, `edit_file`, `run_command`, 웹 읽기·검색을 씁니다. 쓰기·수정·명령은 실행 전에 내용(수정은 줄 단위 비교)을 보여 주고 허용을 받습니다. *모두 허용*은 그 작업 안의 같은 종류만 다시 묻지 않습니다.
+- **에이전트**: 작업 폴더 안에서 `list_files`, `read_file`, `search_files`, `git_status`, `git_diff`, `write_file`, `edit_file`, `run_command`, 웹 읽기·검색을 씁니다. Git 변경 내용은 매번 승인 후 모델로 전달하며, 쓰기·수정·명령은 실행 전에 내용(수정은 줄 단위 비교)을 보여 주고 허용을 받습니다. *모두 허용*은 그 작업 안의 같은 종류만 다시 묻지 않습니다.
 - 답 다시 받기, 실행 중지(⌘.), 끊긴 작업 이어서 실행, 대화 이름 바꾸기·삭제·마크다운 내보내기를 지원합니다.
 - 만든 파일은 오른쪽 패널(⌘J)에 모이고 미리보기, Finder에서 보기, 기본 앱으로 열기를 할 수 있습니다. 실행 파일 형식은 기본 앱으로 열지 않습니다.
 - ⌘K로 대화 제목과 본문까지 검색합니다. 텍스트 파일을 끌어다 놓아 첨부할 수 있습니다.
@@ -77,10 +84,10 @@ npm run web        # 브라우저용: http://127.0.0.1:4317
 npm test                  # Python 테스트 + 데스크톱 보안 테스트 + UI 렌더링 검사
 npm run check:desktop     # Electron 구문과 IPC·URL·파일 열기 경계 검사
 npm run package           # dist/Naru-darwin-arm64/Naru.app 빌드
-python3 scripts/make-icon.py   # 앱 아이콘 다시 그리기 (numpy, Pillow 필요)
+python3 scripts/make-icon.py   # AppKit과 iconutil로 앱 아이콘 다시 만들기 (macOS)
 ```
 
-Electron 45.1.0, Python 표준 라이브러리, 번들한 Mona Sans 글꼴(SIL OFL, `public/fonts/OFL.txt`)을 씁니다. 렌더러에는 Node.js 권한이 없고, 서버는 `127.0.0.1`에만 열립니다. 개인용 개발 빌드이며 Apple 공증은 받지 않았습니다.
+Electron 45.1.0, Python 표준 라이브러리, 번들한 Mona Sans 글꼴(SIL OFL, `public/fonts/OFL.txt`)을 씁니다. 렌더러에는 Node.js 권한이 없고, 서버는 `127.0.0.1`에만 열립니다. 공개된 개발 빌드이며 Apple 개발자 서명과 공증을 받지 않았습니다.
 
 ## 구성
 

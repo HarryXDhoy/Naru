@@ -59,7 +59,7 @@ const HERO_FRAG='#version 300 es\nprecision highp float;out vec4 o;uniform vec2 
 
 let hero=null;
 function heroColor(name){const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();const m=v.match(/^#([0-9a-f]{6})/i);if(!m)return [1,1,1];const n=parseInt(m[1],16);return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255];}
-function stopHero(){if(!hero)return;cancelAnimationFrame(hero.raf);hero.io?.disconnect();hero.ro?.disconnect();hero.mq?.removeEventListener?.('change',hero.recolor);try{hero.gl.getExtension('WEBGL_lose_context')?.loseContext();}catch{}hero=null;}
+function stopHero(){if(!hero)return;cancelAnimationFrame(hero.raf);hero.io?.disconnect();hero.ro?.disconnect();hero.mq?.removeEventListener?.('change',hero.recolor);hero.reduce?.removeEventListener?.('change',hero.motionChange);hero.box.removeEventListener('pointermove',hero.pointerMove);hero.canvas.removeEventListener('webglcontextlost',hero.contextLost);document.removeEventListener('visibilitychange',hero.visibilityChange);window.removeEventListener('resize',hero.resize);try{hero.gl.getExtension('WEBGL_lose_context')?.loseContext();}catch{}hero=null;}
 function startHero(box){
  if(hero&&hero.canvas.isConnected&&box.contains(hero.canvas))return;
  stopHero();
@@ -72,20 +72,26 @@ function startHero(box){
  gl.useProgram(prog);
  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
- const U=n=>gl.getUniformLocation(prog,n);
+ const uniforms={};for(const name of ['cNavy','cDeep','cAccent','cBright','cGround','cHalo','res','lift','zoom','time','mouse'])uniforms[name]=gl.getUniformLocation(prog,name);
+ const U=n=>uniforms[n];
  box.appendChild(canvas);
  const reduce=matchMedia('(prefers-reduced-motion: reduce)');
- const h={canvas,gl,raf:0,visible:true,mouse:[0,0],target:[0,0],t0:performance.now()};hero=h;
+ const h={box,canvas,gl,reduce,raf:0,visible:true,mouse:[0,0],target:[0,0],t0:performance.now()};hero=h;
  h.recolor=()=>{gl.uniform3fv(U('cNavy'),heroColor('--blue-10'));gl.uniform3fv(U('cDeep'),heroColor('--blue-8'));gl.uniform3fv(U('cAccent'),heroColor('--blue-5'));gl.uniform3fv(U('cBright'),heroColor('--blue-2'));gl.uniform3fv(U('cGround'),heroColor('--bg-1'));gl.uniform3fv(U('cHalo'),heroColor('--brand-3'));draw(performance.now());};
  const size=()=>{const dpr=Math.min(2,devicePixelRatio||1),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),ht=Math.max(1,Math.round(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==ht){canvas.width=w;canvas.height=ht;gl.viewport(0,0,w,ht);}gl.uniform2f(U('res'),w,ht);gl.uniform1f(U('lift'),-.2);gl.uniform1f(U('zoom'),1.5);};
- function draw(now){if(hero!==h)return;size();h.mouse[0]+=(h.target[0]-h.mouse[0])*.06;h.mouse[1]+=(h.target[1]-h.mouse[1])*.06;gl.uniform1f(U('time'),reduce.matches?8:(now-h.t0)/1000);gl.uniform2f(U('mouse'),h.mouse[0],h.mouse[1]);gl.drawArrays(gl.TRIANGLES,0,3);}
+ function draw(now){if(hero!==h)return;if(reduce.matches){h.mouse[0]=0;h.mouse[1]=0;}else{h.mouse[0]+=(h.target[0]-h.mouse[0])*.06;h.mouse[1]+=(h.target[1]-h.mouse[1])*.06;}gl.uniform1f(U('time'),reduce.matches?8:(now-h.t0)/1000);gl.uniform2f(U('mouse'),h.mouse[0],h.mouse[1]);gl.drawArrays(gl.TRIANGLES,0,3);}
  const loop=now=>{if(hero!==h)return;draw(now);if(h.visible&&!reduce.matches&&document.visibilityState!=='hidden')h.raf=requestAnimationFrame(loop);else h.raf=0;};
- h.kick=()=>{if(!h.raf&&hero===h)h.raf=requestAnimationFrame(loop);};
- box.addEventListener('pointermove',ev=>{const r=box.getBoundingClientRect();h.target=[(ev.clientX-r.left)/r.width*2-1,-((ev.clientY-r.top)/r.height*2-1)];h.kick();});
+ h.kick=()=>{if(!h.raf&&hero===h&&h.visible&&document.visibilityState!=='hidden')h.raf=requestAnimationFrame(loop);};
+ h.pointerMove=ev=>{if(reduce.matches)return;const r=box.getBoundingClientRect();if(!r.width||!r.height)return;h.target[0]=(ev.clientX-r.left)/r.width*2-1;h.target[1]=-((ev.clientY-r.top)/r.height*2-1);h.kick();};
+ h.visibilityChange=()=>{if(document.visibilityState!=='hidden')h.kick();};
+ h.motionChange=()=>{h.target[0]=0;h.target[1]=0;draw(performance.now());h.kick();};
+ h.resize=()=>{size();if(!h.raf)draw(performance.now());};
+ h.contextLost=()=>{if(hero!==h)return;stopHero();canvas.remove();box.classList.remove('live');};
+ box.addEventListener('pointermove',h.pointerMove);canvas.addEventListener('webglcontextlost',h.contextLost);document.addEventListener('visibilitychange',h.visibilityChange);reduce.addEventListener?.('change',h.motionChange);
  if('IntersectionObserver' in window){h.io=new IntersectionObserver(es=>{h.visible=es[0].isIntersecting;h.kick();});h.io.observe(canvas);}
- if('ResizeObserver' in window){h.ro=new ResizeObserver(()=>{if(!h.raf)draw(performance.now());});h.ro.observe(canvas);}
+ if('ResizeObserver' in window){h.ro=new ResizeObserver(h.resize);h.ro.observe(canvas);}else window.addEventListener('resize',h.resize);
  h.mq=matchMedia('(prefers-color-scheme: dark)');h.mq.addEventListener?.('change',h.recolor);
- box.classList.add('live');h.recolor();h.kick();
+ box.classList.add('live');size();h.recolor();h.kick();
 }
 const pref={get(k,d){try{const v=localStorage.getItem('naru.'+k);return v===null?d:v;}catch{return d;}},set(k,v){try{v==null?localStorage.removeItem('naru.'+k):localStorage.setItem('naru.'+k,String(v));}catch{}}};
 const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',skillIds:[],drafts:{},files:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
@@ -176,7 +182,7 @@ function lineDiff(a,b){
 const diffHTML=(a,b)=>`<div class="diff">${lineDiff(a,b).map(l=>`<div class="${l.k}">${esc(l.t)||' '}</div>`).join('')}</div>`;
 
 // ---------- theme & shell ----------
-function applyTheme(){const t=pref.get('theme','system');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;try{window.naruDesktop?.setTheme?.(t)?.catch?.(()=>{});}catch{}if(hero)hero.recolor();}
+function applyTheme(){const t=pref.get('theme','dark');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;try{window.naruDesktop?.setTheme?.(t)?.catch?.(()=>{});}catch{}if(hero)hero.recolor();}
 function setSide(hidden){S.sideHidden=hidden;pref.set('side',hidden?'0':'1');$('app').classList.toggle('no-side',hidden);renderTop();}
 function closeSide(){$('app').classList.remove('side-open');}
 function go(view){S.view=view;closePop();closeSide();renderAll();$('main').focus({preventScroll:true});}
@@ -265,6 +271,7 @@ function renderThread(toBottom=false){
  const items=[...d.messages.map(m=>({t:m.created_at,k:0,v:m})),...d.runs.map(r=>({t:r.started_at,k:1,v:r}))].sort((a,b)=>a.t<b.t?-1:a.t>b.t?1:a.k-b.k);
  const lastAssistant=[...d.messages].reverse().find(m=>m.role==='assistant');
  const lastMsg=d.messages[d.messages.length-1];const latest=latestRun();
+ chat.classList.toggle('agent-running',latest?.mode==='agent'&&latest?.status==='running');
  col.innerHTML=items.map(it=>it.k===0?messageHTML(it.v,it.v===lastAssistant&&it.v===lastMsg&&!runActive()):runHTML(it.v,it.v===latest)).join('');
  if(toBottom||near)scroll.scrollTop=scroll.scrollHeight;
 }
@@ -291,6 +298,8 @@ function buildSteps(events){
 function stepLabel(name,a,r){
  a=a||{};
  switch(name){
+  case 'git_status':return {icon:'terminal',what:'Git 상태',target:''};
+  case 'git_diff':return {icon:'terminal',what:'변경 내용',target:a.staged?'스테이징됨':'작업 중'};
   case 'todo':return {icon:'check',what:'작업 목록',target:'',note:Array.isArray(r?.items)?`${r.items.filter(i=>i.status==='completed').length}/${r.items.length} 완료`:''};
   case 'search_sessions':return {icon:'search',what:'이전 대화 검색',target:a.query||'',note:Array.isArray(r?.matches)?`${r.matches.length}개`:''};
   case 'list_files':return {icon:'folder',what:'폴더 보기',target:a.path&&a.path!=='.'?a.path:'작업 폴더',note:r?.files?`${r.files.length}개`:''};
@@ -336,11 +345,12 @@ function approvalHTML(a){
  if(a.tool==='write_file'){title=`${base(g.path)} ${g.overwrite?'덮어쓰기':'만들기'}`;where=g.path;body=`<div class="preview"><pre>${esc(String(g.content||'').slice(0,20000))}</pre></div>`;}
  else if(a.tool==='edit_file'){title=`${base(g.path)} 수정`;where=g.path;body=`<div class="preview">${diffHTML(g.old_text||'',g.new_text||'')}</div>`;}
  else if(a.tool==='search_sessions'){title='이전 대화 검색';warn='검색 결과가 현재 모델 제공자에게 전달됩니다.';body=`<div class="preview"><pre>${esc(g.query||'')}</pre></div>`;}
+ else if(a.tool==='git_diff'){title='Git 변경 내용 읽기';warn='변경 내용이 현재 모델 제공자에게 전달됩니다. 비밀 정보가 포함될 수 있어요.';body=`<div class="preview"><pre>${g.staged?'스테이징된 변경':'작업 중인 변경'}</pre></div>`;}
  else if(a.tool==='run_command'){title='명령 실행';warn='이 Mac에서 내 사용자 권한으로 실행돼요.';body=`<div class="preview"><pre>${esc(g.command||'')}</pre></div>`;}
  else{title=a.tool;body=`<div class="preview"><pre>${esc(JSON.stringify(g,null,2))}</pre></div>`;}
  if(where&&where===base(where))where='';
  const glyph=a.tool==='run_command'?'terminal':a.tool==='edit_file'?'pen':'doc';
- return `<div class="approve" role="group" aria-label="실행 전 확인"><div class="head">${icon(glyph)}<h4>${esc(title)}</h4></div>${where?`<p class="where">${esc(where)}</p>`:''}${warn?`<p class="warn">${warn}</p>`:''}${body}<div class="row"><button type="button" class="btn ghost" data-approval="${esc(a.id)}" data-decision="deny">거절</button><span class="grow"></span>${a.tool==='search_sessions'?'':`<button type="button" class="btn" data-approval="${esc(a.id)}" data-decision="approve_all" title="이번 작업에서 같은 종류는 다시 묻지 않아요">모두 허용</button>`}<button type="button" class="btn primary" data-approval="${esc(a.id)}" data-decision="approve" title="허용 (⌘⏎)">허용</button></div></div>`;
+ return `<div class="approve" role="group" aria-label="실행 전 확인"><div class="head">${icon(glyph)}<h4>${esc(title)}</h4></div>${where?`<p class="where">${esc(where)}</p>`:''}${warn?`<p class="warn">${warn}</p>`:''}${body}<div class="row"><button type="button" class="btn ghost" data-approval="${esc(a.id)}" data-decision="deny">거절</button><span class="grow"></span>${['search_sessions','git_diff'].includes(a.tool)?'':`<button type="button" class="btn" data-approval="${esc(a.id)}" data-decision="approve_all" title="이번 작업에서 같은 종류는 다시 묻지 않아요">모두 허용</button>`}<button type="button" class="btn primary" data-approval="${esc(a.id)}" data-decision="approve" title="허용 (⌘⏎)">허용</button></div></div>`;
 }
 function runHTML(run,isLatest){
  const d=S.detail,steps=buildSteps(d.events.filter(e=>e.run_id===run.id)),active=ACTIVE.includes(run.status);
@@ -356,7 +366,7 @@ function runHTML(run,isLatest){
   html+=pending.map(approvalHTML).join('');
   const text=S.detail.live?.run_id===run.id?S.live:'';
   html+=`<div class="md" id="live">${text?markdown(text):''}</div>`;
-  if(!text&&!pending.length)html+='<div class="waiting" id="waiting"><span class="live-dot" role="img" aria-label="작업 중"></span></div>';
+  if(!text&&!pending.length)html+='<div class="waiting" id="waiting"><span class="thinking-dots" role="img" aria-label="작업 중"><i></i><i></i><i></i></span></div>';
  }else if(broken){
   const msg=run.status==='cancelled'?'중지했어요.':run.status==='interrupted'?'앱이 닫혀 작업이 멈췄어요.':(run.error||'작업을 마치지 못했어요.');
   html+=`<div class="notice ${run.status==='failed'?'bad':''}"><p>${esc(msg)}</p>${isLatest?`<button type="button" class="btn sm" data-act="resume" data-id="${esc(run.id)}">${run.status==='failed'?'다시 시도':'이어서 실행'}</button>`:''}</div>`;
@@ -687,11 +697,11 @@ function renderMemory(){
  $('memory-form').addEventListener('submit',async ev=>{ev.preventDefault();const t=$('memory-input'),content=t.value.trim();if(!content)return;try{await api('/api/memories',{method:'POST',body:{content}});await refreshState();renderMemory();toast('저장했어요');}catch(err){toast(err.message,true);}});
 }
 function renderSettings(){
- const x=S.data.settings,theme=pref.get('theme','system'),desk=!!window.naruDesktop?.chooseDirectory;
+ const x=S.data.settings,theme=pref.get('theme','dark'),desk=!!window.naruDesktop?.chooseDirectory;
  const picker=id=>desk?`<button type="button" class="btn" data-act="pick-folder" data-id="${id}" title="폴더 고르기">${icon('folder')}고르기</button>`:'';
  $('main').innerHTML=page('설정',`<form class="form" id="settings-form">
  <h2>화면</h2><div class="seg wide" role="group" aria-label="밝기">${[['system','시스템'],['light','밝게'],['dark','어둡게']].map(([k,n])=>`<button type="button" data-act="theme" data-id="${k}" aria-pressed="${theme===k}">${n}</button>`).join('')}</div>
- <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">에이전트는 이 폴더 안에서만 파일을 읽고 바꿔요.</span></div>
+ <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">에이전트는 이 폴더 안에서 파일을 읽고 바꿔요. 실행 시 루트의 프로젝트 지침 파일은 연결된 모델 제공자에 전달돼요.</span></div>
  <div class="field"><label for="st-rp">보고서 폴더</label><div class="inrow"><input id="st-rp" name="report_directory" required value="${esc(x.report_directory)}">${picker('st-rp')}</div></div>
  <h2>실행</h2><div class="grid2"><div class="field"><label for="st-steps">한 번에 쓰는 도구 단계</label><input id="st-steps" name="max_steps" type="number" min="1" max="50" required value="${esc(x.max_steps||12)}"></div><div class="field"><label for="st-tok">최대 출력 토큰</label><input id="st-tok" name="max_output_tokens" type="number" min="256" max="32768" step="256" required value="${esc(x.max_output_tokens||4096)}"></div></div>
  <h2>모든 대화에 줄 지침</h2><div class="field"><label class="sr" for="st-sys">지침</label><textarea id="st-sys" name="system_prompt" rows="6">${esc(x.system_prompt||'')}</textarea></div>
@@ -790,6 +800,8 @@ $('dialog').addEventListener('close',()=>{if(lastFocus?.isConnected)lastFocus.fo
 $('preview').addEventListener('close',()=>{S.blobs.forEach(u=>URL.revokeObjectURL(u));S.blobs=[];});
 for(const id of ['dialog','preview'])$(id).addEventListener('mousedown',ev=>{if(ev.target===$(id)){const r=$(id).getBoundingClientRect();if(ev.clientX<r.left||ev.clientX>r.right||ev.clientY<r.top||ev.clientY>r.bottom)$(id).close();}});
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>applyTheme());
+function syncVisibility(){document.documentElement.classList.toggle?.('page-hidden',document.visibilityState==='hidden');}
+document.addEventListener('visibilitychange',syncVisibility);syncVisibility();
 
 // ---------- live updates ----------
 let ticking=false,lastState=0;

@@ -22,6 +22,9 @@ S.data={providers:[chat,local],accounts:{codex:{available:true,authenticated:tru
  html=approvalHTML({id:'abc',tool:'search_sessions',arguments:{query:'<private>'}});
  assert(html.includes('이전 대화 검색')&&html.includes('현재 모델 제공자')&&html.includes('&lt;private&gt;'));
  assert(!html.includes('approve_all'),'search requires per-query approval');
+ html=approvalHTML({id:'def',tool:'git_diff',arguments:{staged:true}});
+ assert(html.includes('Git 변경 내용 읽기')&&html.includes('현재 모델 제공자')&&html.includes('스테이징된 변경'));
+ assert(!html.includes('approve_all'),'diff requires fresh approval');
  html=detailHTML({name:'search_sessions',args:{query:'test'},result:{matches:[{title:'Prior <chat>',role:'user',excerpt:'found & here'}]}});
  assert(html.includes('Prior &lt;chat&gt; · 사용자')&&html.includes('found &amp; here'));
  html=detailHTML({name:'todo',args:{},result:{items:[{text:'Finish',status:'completed'},{text:'Next',status:'in_progress'}]}});
