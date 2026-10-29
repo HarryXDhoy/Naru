@@ -260,7 +260,7 @@ function renderTools(){
 }
 function queueHTML(items,paused,active,error){
  if(!items.length)return '';
- return `<section class="message-queue" aria-label="대기 메시지"><div class="queue-head"><strong>대기 메시지 ${items.length}</strong><span>${paused?'일시정지됨':'현재 작업이 끝나면 순서대로 보내요'}</span>${paused&&!active?'<button type="button" class="btn" data-act="queue-resume">계속</button>':''}</div>${error?`<p class="queue-error" role="alert">${esc(error)}</p>`:''}<ol class="queue-list">${items.map((item,i)=>{const parts=splitAttachments(item.content);return `<li class="queue-item"><span class="queue-number">${i+1}</span><div class="queue-content"><div class="queue-text">${esc(parts.text)}</div>${parts.files.length?`<div class="queue-files">첨부: ${parts.files.map(esc).join(', ')}</div>`:''}</div><div class="queue-actions">${iconBtn('edit','대기 메시지 편집','queue-edit',item.id)}${iconBtn('x','대기 메시지 삭제','queue-remove',item.id)}</div></li>`;}).join('')}</ol></section>`;
+ return `<section class="message-queue" aria-label="대기 메시지"><div class="queue-head"><strong>대기 메시지 ${items.length}</strong>${paused?'<span>일시정지됨</span>':''}${paused&&!active?'<button type="button" class="btn" data-act="queue-resume">계속</button>':''}</div>${error?`<p class="queue-error" role="alert">${esc(error)}</p>`:''}<ol class="queue-list">${items.map((item,i)=>{const parts=splitAttachments(item.content);return `<li class="queue-item"><span class="queue-number">${i+1}</span><div class="queue-content"><div class="queue-text">${esc(parts.text)}</div>${parts.files.length?`<div class="queue-files">첨부: ${parts.files.map(esc).join(', ')}</div>`:''}</div><div class="queue-actions">${iconBtn('edit','대기 메시지 편집','queue-edit',item.id)}${iconBtn('x','대기 메시지 삭제','queue-remove',item.id)}</div></li>`;}).join('')}</ol></section>`;
 }
 function renderQueue(){const el=$('message-queue');if(!el)return;const items=queuePending();el.hidden=!items.length;el.innerHTML=queueHTML(items,!!S.detail?.queue_paused,runActive(),S.detail?.queue_error);}
 function renderChips(){
@@ -409,7 +409,7 @@ function renderDrawer(){
  const el=$('drawer-in');if(!el)return;const d=S.detail;if(!d){el.innerHTML='';return;}
  const arts=d.artifacts||[],run=latestRun(),u=run?.usage||{},p=providerById(run?.provider_id),t=duration(run);
  const ico=n=>/\.(png|jpe?g|gif|webp|svg)$/i.test(n)?'image':/\.(html?|js|ts|py|css|json|sh)$/i.test(n)?'code':'doc';
- el.innerHTML=`<h3>파일</h3>${arts.length?arts.map(a=>`<button type="button" class="art" data-artifact="${esc(a.id)}" title="${esc(a.path)}"><span class="ico">${icon(ico(a.name))}</span><div><b>${esc(a.name)}</b><small>${size(a.size)}</small></div></button>`).join(''):'<p class="empty-note">이 대화에서 만든 파일이 여기 모여요.</p>'}
+ el.innerHTML=`<h3>파일</h3>${arts.length?arts.map(a=>`<button type="button" class="art" data-artifact="${esc(a.id)}" title="${esc(a.path)}"><span class="ico">${icon(ico(a.name))}</span><div><b>${esc(a.name)}</b><small>${size(a.size)}</small></div></button>`).join(''):'<p class="empty-note">파일 없음</p>'}
  ${run?`<h3>마지막 실행</h3><dl class="facts"><dt>요청 모델</dt><dd title="${esc(run.model||'')}">${esc(run.model||p?.name||'기본 모델')}</dd>${run.actual_model?`<dt>제공자 응답 모델</dt><dd title="${esc(run.actual_model)}">${esc(run.actual_model)}</dd>`:''}<dt>상태</dt><dd>${esc(STATUS[run.status]||run.status)}</dd>${t?`<dt>걸린 시간</dt><dd>${t}</dd>`:''}${u.input_tokens?`<dt>입력 토큰</dt><dd>${Number(u.input_tokens).toLocaleString()}</dd>`:''}${u.output_tokens?`<dt>출력 토큰</dt><dd>${Number(u.output_tokens).toLocaleString()}</dd>`:''}</dl>`:''}
  <h3>작업 폴더</h3><p class="path">${esc(S.data.settings.workspace)}</p>${window.naruDesktop?.revealPath?`<button type="button" class="btn sm" style="margin:0 6px" data-act="reveal-workspace">${icon('folder')}Finder에서 보기</button>`:''}`;
 }
@@ -462,9 +462,9 @@ function onTransition(before,after){
 function notify(title,body){try{if(document.hasFocus()||!('Notification' in window)||Notification.permission!=='granted')return;new Notification(title,{body});}catch{}}
 function notificationHTML(){
  if(!('Notification' in window))return '<span class="hint">이 환경에서는 알림을 사용할 수 없어요.</span>';
- if(Notification.permission==='granted')return '<span class="hint">알림이 허용되어 있어요.</span>';
+ if(Notification.permission==='granted')return '<span>켜짐</span>';
  if(Notification.permission==='denied')return '<span class="hint">알림이 차단되어 있어요. 브라우저 또는 macOS 알림 설정에서 허용해 주세요.</span>';
- return '<button type="button" class="btn" data-act="enable-notifications">알림 켜기</button><span class="hint">작업 완료나 확인 요청을 알려 드려요.</span>';
+ return '<button type="button" class="btn" data-act="enable-notifications">알림 켜기</button>';
 }
 async function enableNotifications(){
  if(!('Notification' in window)||Notification.permission!=='default')return;
@@ -711,7 +711,7 @@ async function connectSkillFolder(path){
  closeDialog();if(S.view==='skills')renderSkills();toast(skill.enabled?'스킬을 연결하고 선택했어요':'기존 스킬이 꺼져 있어요. 스킬 화면에서 켜 주세요.');
 }
 async function discoverSkills(){
- const dlg=openDialog('설치된 스킬 찾기','<div class="panel" id="skill-discover-results"><p class="hint">찾는 중…</p></div>',{wide:true,desc:'추가할 스킬을 직접 선택하세요. 지침은 연결 시 복사하고 참조 파일은 실행 시 읽어요. 선택하면 폴더 경로와 지침, 참조 내용이 모델 제공자에게 전달될 수 있어요. 지침 원본이 바뀌면 삭제 후 다시 연결하세요. 외부 도구는 별도로 설치·연결해야 해요.'});
+ const dlg=openDialog('설치된 스킬 찾기','<div class="panel" id="skill-discover-results"><p class="hint">찾는 중…</p></div>',{wide:true,desc:'추가할 스킬을 직접 선택하세요. 스킬의 지침, 폴더 경로와 참조 파일은 모델 제공자에게 전달될 수 있어요. 원본 변경 후에는 다시 연결하세요. 외부 도구는 별도로 설치해야 해요.'});
  const results=$('skill-discover-results');
  try{const data=await api('/api/skills/discover');if(dlg.open&&$('skill-discover-results')===results)results.innerHTML=skillDiscoveryHTML(Array.isArray(data.skills)?data.skills:[]);}
  catch(err){if(dlg.open&&$('skill-discover-results')===results)results.innerHTML=`<p class="hint bad">${esc(err.message||'스킬을 찾지 못했어요.')}</p>`;}
@@ -721,7 +721,7 @@ async function importDiscoveredSkill(el){
 }
 function importSkillFolder(){
  const picker=window.naruDesktop?.chooseDirectory?`<button type="button" class="btn" data-act="pick-folder" data-id="skill-folder-path">${icon('folder')}고르기</button>`:'';
- openDialog('스킬 폴더 연결',`<form class="form" id="skill-folder-form"><div class="field"><label for="skill-folder-path">SKILL.md가 들어 있는 폴더</label><div class="inrow"><input id="skill-folder-path" name="path" required placeholder="예: /Users/name/.agents/skills/ego-browser">${picker}</div><span class="hint">지침은 연결 시 복사하고 참조 파일은 실행 시 읽어요. 선택하면 폴더 경로와 지침, 참조 내용이 모델 제공자에게 전달될 수 있어요. 지침 원본이 바뀌면 삭제 후 다시 연결하세요. 외부 도구는 별도로 설치·연결해야 해요.</span></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">연결하고 선택</button></div></form>`,{wide:true,desc:'연결 후 입력창의 스킬 메뉴에서 선택하세요. 파일 변경과 명령 실행은 도구 승인 설정을 따라요.'});
+ openDialog('스킬 폴더 연결',`<form class="form" id="skill-folder-form"><div class="field"><label for="skill-folder-path">SKILL.md가 들어 있는 폴더</label><div class="inrow"><input id="skill-folder-path" name="path" required placeholder="예: /Users/name/.agents/skills/ego-browser">${picker}</div><span class="hint">스킬의 지침, 폴더 경로와 참조 파일은 모델 제공자에게 전달될 수 있어요. 원본 변경 후에는 다시 연결하세요. 외부 도구는 별도로 설치해야 해요.</span></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">연결하고 선택</button></div></form>`,{wide:true,desc:'연결 후 입력창의 스킬 메뉴에서 선택하세요. 파일 변경과 명령 실행은 도구 승인 설정을 따라요.'});
  $('skill-folder-form').addEventListener('submit',ev=>{ev.preventDefault();const path=$('skill-folder-path').value.trim();if(!path){dialogError('스킬 폴더를 선택하세요.');return;}return submitForm(ev.target,()=>connectSkillFolder(path));});
 }
 function saveMemoryDialog(content){
@@ -769,7 +769,7 @@ function renderModels(){
 }
 function renderSkills(){
  const list=S.data.skills||[];
- $('main').innerHTML=page('스킬',`<p class="lead">입력창에서 스킬을 직접 선택하거나, 에이전트가 필요할 때 불러오도록 할 수 있어요. 지침은 모델 제공자에게 전달되며, 파일과 명령 사용은 에이전트 모드와 도구 승인 설정을 따라요.</p><div class="panel">${list.length?list.map(s=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}${s.source_dir?`<span class="sub" title="${esc(s.source_dir)}">폴더 연결됨</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit','편집','edit-skill',s.id)}${iconBtn('trash','삭제','delete-skill',s.id)}</div></div>`).join(''):'<div class="blank"><p>아직 스킬이 없어요.</p></div>'}</div>`,`<div class="skill-actions"><button type="button" class="btn" data-act="discover-skills">설치된 스킬 찾기</button><button type="button" class="btn" data-act="import-skill-folder">스킬 폴더 연결</button><button type="button" class="btn" data-act="import-skill">파일만 가져오기</button><button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button></div>`);
+ $('main').innerHTML=page('스킬',`<p class="lead">스킬 지침은 모델에 전달되며, 도구는 에이전트 모드의 승인 설정을 따라요.</p><div class="panel">${list.length?list.map(s=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}${s.source_dir?`<span class="sub" title="${esc(s.source_dir)}">폴더 연결됨</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit','편집','edit-skill',s.id)}${iconBtn('trash','삭제','delete-skill',s.id)}</div></div>`).join(''):'<div class="blank"><p>아직 스킬이 없어요.</p></div>'}</div>`,`<div class="skill-actions"><button type="button" class="btn" data-act="discover-skills">설치된 스킬 찾기</button><button type="button" class="btn" data-act="import-skill-folder">스킬 폴더 연결</button><button type="button" class="btn" data-act="import-skill">파일만 가져오기</button><button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button></div>`);
 }
 function renderMemory(){
  const list=S.data.memories||[];
@@ -782,7 +782,7 @@ function renderSettings(){
  $('main').innerHTML=page('설정',`<form class="form" id="settings-form">
  <h2>화면</h2><div class="seg wide" role="group" aria-label="밝기">${[['system','시스템'],['light','밝게'],['dark','어둡게']].map(([k,n])=>`<button type="button" data-act="theme" data-id="${k}" aria-pressed="${theme===k}">${n}</button>`).join('')}</div>
  <h2>알림</h2><div class="field" id="notification-setting">${notificationHTML()}</div>
- <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">실행 시 루트의 프로젝트 지침 파일은 연결된 모델 제공자에 전달돼요. 파일 접근 범위는 아래 도구 승인 설정에 따라 달라져요.</span></div>
+ <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">프로젝트 지침은 모델 제공자에게 전달돼요.</span></div>
  <div class="field"><label for="st-rp">보고서 폴더</label><div class="inrow"><input id="st-rp" name="report_directory" required value="${esc(x.report_directory)}">${picker('st-rp')}</div></div>
  <h2>도구 승인</h2><div class="field"><label for="st-access">접근 권한</label><select id="st-access" name="access_mode" aria-describedby="st-access-help">${[['manual','매번 승인'],['auto_approve','자동 승인 (Approve for me)'],['full_access','전체 접근 (Full access)']].map(([k,n])=>`<option value="${k}"${(x.access_mode||'manual')===k?' selected':''}>${n}</option>`).join('')}</select><div id="st-access-help" class="hint">
  <p><strong>매번 승인:</strong> 파일 쓰기·수정, 터미널 명령, 스킬 불러오기, 이전 대화 검색, Git 변경 조회 전에 승인해요.</p>
