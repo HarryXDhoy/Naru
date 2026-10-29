@@ -1,6 +1,6 @@
 # Naru
 
-개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·OpenRouter 계정과 로컬·클라우드 모델 서버를 연결합니다. Gemini·GitHub Copilot CLI 계정 실행은 현재 일시 중지 중입니다. 화면은 Defined 스타일의 검은 바탕과 컬러 하프톤을 사용하고, ego(lite) 움직임과 [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
+개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·OpenRouter 계정과 로컬·클라우드 모델 서버를 연결합니다. Gemini·GitHub Copilot CLI 계정 실행은 현재 일시 중지 중입니다. 화면은 Defined 스타일의 헤어라인 카드와 컬러 하프톤을 사용하고, ego(lite) 움직임과 [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
 
 ## 다운로드
 
