@@ -1,0 +1,4 @@
+.agent-status{display:inline-flex;align-items:center;gap:9px;max-width:100%;margin:8px 0 12px;padding:7px 12px;border-radius:10px;background:var(--bg-3);box-shadow:inset 0 0 0 1px var(--bg-alpha-3);color:var(--text-2);font:500 13px/20px var(--font-sans)}
+.agent-status-indicator{width:7px;height:7px;flex:none;border-radius:50%;background:var(--badge-run-fg)}
+.agent-status-indicator.attention{background:var(--badge-att-fg)}
+.agent-status span:last-child{min-width:0;overflow-wrap:anywhere}

@@ -400,7 +400,7 @@ function approvalHTML(a){
  return `<div class="approve" role="group" aria-label="실행 전 확인"><div class="head">${icon(glyph)}<h4>${esc(title)}</h4></div>${where?`<p class="where">${esc(where)}</p>`:''}${warn?`<p class="warn">${warn}</p>`:''}${body}<div class="row"><button type="button" class="btn ghost" data-approval="${esc(a.id)}" data-decision="deny">거절</button><span class="grow"></span>${['search_sessions','git_diff','load_skill'].includes(a.tool)?'':`<button type="button" class="btn" data-approval="${esc(a.id)}" data-decision="approve_all" title="이번 작업에서 같은 종류는 다시 묻지 않아요">모두 허용</button>`}<button type="button" class="btn primary" data-approval="${esc(a.id)}" data-decision="approve" title="허용 (⌘⏎)">허용</button></div></div>`;
 }
 function runHTML(run,isLatest){
- const d=S.detail,steps=buildSteps(d.events.filter(e=>e.run_id===run.id)),active=ACTIVE.includes(run.status);
+ const d=S.detail,events=d.events.filter(e=>e.run_id===run.id),steps=buildSteps(events),active=ACTIVE.includes(run.status);
  const pending=d.approvals.filter(a=>a.run_id===run.id&&a.status==='pending'&&active);
  const tools=steps.filter(s=>s.type==='tool').length,broken=['failed','cancelled','interrupted'].includes(run.status);
  const expanded=active||S.open.has(run.id)||(broken&&isLatest&&!S.open.has('x'+run.id));
@@ -410,16 +410,29 @@ function runHTML(run,isLatest){
   if(expanded)html+=`<div class="steps">${steps.map(stepHTML).join('')}</div>`;
  }
  if(active){
+  const status=isLatest?agentStatusHTML(run,events):'';
+  html+=status;
   html+=pending.map(approvalHTML).join('');
   const text=S.detail.live?.run_id===run.id?S.live:'';
   html+=`<div class="md" id="live">${text?markdown(text):''}</div>`;
-  if(!text&&!pending.length)html+='<div class="waiting" id="waiting"><span class="thinking-dots" role="img" aria-label="작업 중"><i></i><i></i><i></i></span></div>';
+  if(!text&&!pending.length&&!status)html+='<div class="waiting" id="waiting"><span class="thinking-dots" role="img" aria-label="작업 중"><i></i><i></i><i></i></span></div>';
  }else if(broken){
   const msg=run.status==='cancelled'?'중지했어요.':run.status==='interrupted'?'앱이 닫혀 작업이 멈췄어요.':(run.error||'작업을 마치지 못했어요.');
   html+=`<div class="notice ${run.status==='failed'?'bad':''}"><p>${esc(msg)}</p>${run.create_image?'<p>이미지 요청이 전달됐다면 중지해도 사용량이나 요금이 발생할 수 있어요. 다시 요청하면 새 호출이 시작돼요.</p>':''}${isLatest?`<button type="button" class="btn sm" data-act="resume" data-id="${esc(run.id)}">${run.create_image?'다시 요청':run.status==='failed'?'다시 시도':'이어서 실행'}</button>`:''}</div>`;
  }
  html+=generatedImagesHTML(run,d.artifacts||[]);
  return html+'</section>';
+}
+function agentStatusHTML(run,events){
+ if(!run||!ACTIVE.includes(run.status)||run.mode!=='agent'||run.create_image)return '';
+ let text='작업 중';
+ if(run.status==='awaiting_approval')text='승인 대기';
+ else{
+  const latest=[...events].reverse().find(e=>['status','tool_call','tool_result'].includes(e.type));
+  if(latest?.type==='status'&&typeof latest.data?.text==='string'&&latest.data.text.trim())text=latest.data.text.trim();
+  else if(latest?.type==='tool_call')text='도구 실행 중';
+ }
+ return `<div class="agent-status" role="status" aria-live="polite"><span class="agent-status-indicator${run.status==='awaiting_approval'?' attention':''}" aria-hidden="true"></span><span>${esc(text.slice(0,160))}</span></div>`;
 }
 function generatedImagesHTML(run,artifacts){
  const images=artifacts.filter(a=>a.image_generated&&String(a.run_id)===String(run.id));
