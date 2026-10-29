@@ -1,0 +1,23 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const nodes=new Map();
+function node(){return {value:'',innerHTML:'',textContent:'',style:{},hidden:false,selectionStart:0,selectionEnd:0,offsetWidth:320,offsetHeight:80,classList:{add(){},remove(){},toggle(){}},addEventListener(){},setAttribute(){},remove(){},querySelector(){return null},querySelectorAll(){return []},getBoundingClientRect(){return {left:100,top:500,bottom:520}},setSelectionRange(a,b){this.selectionStart=a;this.selectionEnd=b},focus(){}};}
+const c={console,URL,JSON,Date,Intl,Number,String,Map,Set,Math,TextDecoder,Error,Promise,Array,Object,RegExp,Uint16Array,Blob:class{},__NARU_TEST__:true,innerWidth:1200,innerHeight:900,
+ document:{body:{appendChild(){}},createElement(){return node()},getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)},addEventListener(){},documentElement:{dataset:{},classList:{add(){},toggle(){}}},querySelector(){return null},querySelectorAll(){return []}},
+ window:{addEventListener(){}},addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),localStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout,clearTimeout,setInterval(){},clearInterval(){},navigator:{},getComputedStyle:()=>({})};c.globalThis=c;Object.assign(c.window,c);
+const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve}};const response=x=>({ok:true,json:async()=>x});let read;const requests=[];
+c.fetch=async(url,opts={})=>{requests.push({url,body:opts.body?JSON.parse(opts.body):null});if(url.startsWith('/api/context/files'))return response({files:['src/test.py','src/other.py'],workspace:'/workspace',truncated:false});if(url==='/api/context/read')return read.promise;throw Error('unexpected '+url)};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8'),c);
+const {S,mentionAt,updateFileMention,fileMentionKey,selectContextFile,getFileMention}=c.NaruUI;const wait=()=>new Promise(r=>setTimeout(r,220));
+S.data={providers:[],sessions:[{id:'s1'},{id:'s2'}],skills:[],settings:{workspace:'/workspace'},active:{},csrf_token:'test'};S.view='chat';S.sid='s1';S.files.s1=[];
+(async()=>{
+ const input=nodes.get('input')||c.document.getElementById('input');input.value='설명 @test';input.selectionStart=input.selectionEnd=input.value.length;
+ assert.equal(mentionAt(input).query,'test');input.value='test@example.com';input.selectionStart=input.selectionEnd=input.value.length;assert.equal(mentionAt(input),null,'이메일은 파일 호출이 아님');
+ input.value='설명 @test';input.selectionStart=input.selectionEnd=input.value.length;S.drafts.s1=input.value;updateFileMention(input);await wait();let menu=getFileMention();assert.equal(menu.files.length,2);assert.match(menu.el.innerHTML,/src\/test.py/);assert.equal(requests.length,1,'검색만으로 파일 내용을 읽지 않음');
+ let prevented=false;assert(fileMentionKey({key:'ArrowDown',preventDefault(){prevented=true},stopPropagation(){}}));assert(prevented);assert.equal(menu.selected,1);
+ read=deferred();const first=selectContextFile('src/test.py',menu);assert.deepEqual(requests.at(-1).body,{path:'src/test.py',workspace:'/workspace'});assert.equal(c.NaruUI.fileReads.s1,1,'읽는 동안 전송을 기다림');
+ read.resolve(response({path:'src/test.py',name:'src/test.py',text:'내용',size:6,workspace:'/workspace'}));await first;assert.equal(S.files.s1[0].text,'내용');assert.equal(input.value,'설명 ');assert.equal(S.drafts.s1,'설명 ');
+ input.value='다음 @test';input.selectionStart=input.selectionEnd=input.value.length;S.drafts.s1=input.value;updateFileMention(input);await wait();menu=getFileMention();read=deferred();const stale=selectContextFile('src/test.py',menu);S.sid='s2';S.epoch++;read.resolve(response({path:'src/test.py',name:'src/test.py',text:'다른 파일',size:11,workspace:'/workspace'}));await stale;assert.equal(S.files.s1.length,1,'대화를 바꾸면 늦은 결과는 첨부하지 않음');assert.equal(S.files.s2,undefined);
+ S.sid='s1';S.epoch++;input.value='@test';input.selectionStart=input.selectionEnd=5;updateFileMention(input);await wait();menu=getFileMention();read=deferred();const changed=selectContextFile('src/test.py',menu);input.value='@test 이어서';S.drafts.s1=input.value;read.resolve(response({path:'src/test.py',name:'src/test.py',text:'내용',size:6,workspace:'/workspace'}));await changed;assert.equal(S.files.s1.length,1,'읽는 중 새로 작성한 초안에 추가하지 않음');assert.equal(input.value,'@test 이어서');
+ console.log('Workspace file mention, selection snapshot, keyboard and stale session/draft safety passed.');
+})().catch(e=>{console.error(e);process.exitCode=1});

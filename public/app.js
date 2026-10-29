@@ -4,11 +4,11 @@ const $=id=>document.getElementById(id);
 const enc=encodeURIComponent;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl=v=>{try{const u=new URL(v);return ['https:','http:','mailto:'].includes(u.protocol)?u.href:'';}catch{return '';}};
-const ACTIVE=['running','awaiting_approval'];
+const ACTIVE=['running','awaiting_approval','awaiting_user'];
 const ACCOUNT_KINDS=['codex','claude_code','gemini_cli','copilot_cli'];
 const ACCOUNT_NAMES={codex:'ChatGPT',claude_code:'Claude',gemini_cli:'Gemini',copilot_cli:'GitHub Copilot',openrouter:'OpenRouter'};
 const KIND_LABEL={codex:'ChatGPT 계정',claude_code:'Claude 계정',gemini_cli:'Google 계정',copilot_cli:'GitHub 계정',responses:'OpenAI Responses',openai:'OpenAI 호환',anthropic:'Anthropic API',gemini:'Gemini API',ollama:'Ollama'};
-const STATUS={running:'실행 중',awaiting_approval:'승인 대기',completed:'완료',failed:'실패',cancelled:'중지됨',interrupted:'중단됨'};
+const STATUS={running:'실행 중',awaiting_approval:'승인 대기',awaiting_user:'답변 대기',completed:'완료',failed:'실패',cancelled:'중지됨',interrupted:'중단됨'};
 const ATTACH_HEAD='\n\n다음은 사용자가 첨부한 참고 자료입니다.\n';
 const IMAGE_TYPES=new Set(['image/png','image/jpeg','image/webp','image/gif']);
 const imageSource=image=>IMAGE_TYPES.has(image?.mime)&&typeof image.data==='string'&&/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)?`data:${image.mime};base64,${image.data}`:'';
@@ -19,6 +19,7 @@ const I={
  bolt:'<path d="M13.5 2.5 5 13h6l-.5 8.5L19 11h-6z"/>',
  compose:'<path d="M12 20h8"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
  search:'<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+ fork:'<circle cx="7" cy="5" r="2"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="7" r="2"/><path d="M7 7v10M17 9v2a4 4 0 0 1-4 4H7"/>',
  sidebar:'<rect x="3" y="4.5" width="18" height="15" rx="3.5"/><path d="M9.5 4.5v15"/>',
  menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
  files:'<path d="M7.5 3.5H14l5 5v10.5a2 2 0 0 1-2 2H7.5a2 2 0 0 1-2-2v-13.5a2 2 0 0 1 2-2Z"/><path d="M14 3.5v5h5"/>',
@@ -113,7 +114,7 @@ function startHero(box){
  box.classList.add('live');size();h.recolor();h.kick();
 }
 const pref={get(k,d){try{const native=window.naruDesktop?.getPreference?.(k);if(native!=null)return native;const v=localStorage.getItem('naru.'+k);if(v!==null)window.naruDesktop?.setPreference?.(k,v);return v===null?d:v;}catch{return d;}},set(k,v){try{v=v==null?null:String(v);if(window.naruDesktop?.setPreference?.(k,v)===false)toast('화면 설정을 저장하지 못했어요. 앱 데이터 폴더 권한을 확인하세요.',true);v===null?localStorage.removeItem('naru.'+k):localStorage.setItem('naru.'+k,v);}catch{}}};
-const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',newAccess:'inherit',newAccessRevision:0,accessSaving:false,newReasoning:'default',newReasoningRevision:0,reasoningSaving:false,modelSaving:false,skillIds:[],drafts:{},files:{},imageModes:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
+const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',newAccess:'inherit',newAccessRevision:0,accessSaving:false,newReasoning:'default',newReasoningRevision:0,reasoningSaving:false,modelSaving:false,modeSaving:false,modeSaveSid:null,skillIds:[],drafts:{},files:{},imageModes:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
 
 // ---------- utilities ----------
 let toastTimer;
@@ -214,7 +215,7 @@ function renderSide(){
  $('side').innerHTML=`<div class="side-top">${WORDMARK}<span class="grow"></span>${iconBtn('sidebar','사이드바 숨기기 (⌘\\)','toggle-side')}</div>
  <button type="button" class="side-item strong" data-act="new" title="새 대화 (⌘N)">${icon('compose')}<span>새 대화</span></button>
  <button type="button" class="side-item" data-act="palette" title="검색 (⌘K)">${icon('search')}<span>검색</span></button>
- <nav class="sessions" aria-label="최근 대화">${d.sessions.map(s=>{const st=active[s.id],title=s.title||'새 대화';return `<div class="session-row"><button type="button" class="side-item" data-session="${esc(s.id)}" title="${esc(title)}"${S.view==='chat'&&S.sid===s.id?' aria-current="page"':''}><span>${esc(title)}</span>${st?`<i class="dot ${st==='awaiting_approval'?'att':''}" role="img" aria-label="${st==='awaiting_approval'?'확인 필요':'실행 중'}"></i>`:''}</button><button type="button" class="icon-btn session-delete" data-act="delete-chat" data-id="${esc(s.id)}" title="대화 삭제" aria-label="${esc(title)} 대화 삭제">${icon('trash')}</button></div>`;}).join('')}</nav>
+ <nav class="sessions" aria-label="최근 대화">${d.sessions.map(s=>{const st=active[s.id],title=s.title||'새 대화';return `<div class="session-row"><button type="button" class="side-item" data-session="${esc(s.id)}" title="${esc(title)}"${S.view==='chat'&&S.sid===s.id?' aria-current="page"':''}><span>${esc(title)}</span>${st?`<i class="dot ${['awaiting_approval','awaiting_user'].includes(st)?'att':''}" role="img" aria-label="${['awaiting_approval','awaiting_user'].includes(st)?'확인 필요':'실행 중'}"></i>`:''}</button><button type="button" class="icon-btn session-delete" data-act="delete-chat" data-id="${esc(s.id)}" title="대화 삭제" aria-label="${esc(title)} 대화 삭제">${icon('trash')}</button></div>`;}).join('')}</nav>
  <nav class="side-nav" aria-label="관리">${S.update?.status==='ready'?`<button type="button" class="side-item update-ready" data-view="settings">${icon('download')}<span>업데이트 준비됨</span></button>`:''}${nav.map(([v,ic,t])=>`<button type="button" class="side-item" data-view="${v}"${S.view===v?' aria-current="page"':''}>${icon(ic)}<span>${t}</span></button>`).join('')}</nav>`;
 }
 let renaming=null;
@@ -226,7 +227,7 @@ function renderTop(){
  const s=S.view==='chat'?S.detail?.session:null;
  html+=s?`<button type="button" class="top-title" id="top-title" data-act="rename" title="이름 바꾸기">${esc(s.title)}</button>`:'<span class="top-title"></span>';
  const lr=s?latestRun():null;
- if(lr&&ACTIVE.includes(lr.status))html+=lr.status==='awaiting_approval'?'<span class="badge attention">확인 필요</span>':'<span class="badge running"><i></i>실행 중</span>';
+ if(lr&&ACTIVE.includes(lr.status))html+=['awaiting_approval','awaiting_user'].includes(lr.status)?'<span class="badge attention">확인 필요</span>':'<span class="badge running"><i></i>실행 중</span>';
  html+='<span class="grow"></span>';
  if(S.update?.status==='ready')html+=iconBtn('download','업데이트 준비됨','update-open');
  if(s){const n=S.detail.artifacts?.length||0;html+=`<button type="button" class="icon-btn ${S.drawer?'on':''}" data-act="drawer" title="파일과 실행 정보 (⌘J)" aria-label="파일과 실행 정보" aria-pressed="${S.drawer}">${icon('files')}${n?`<span class="count">${n}</span>`:''}</button>${iconBtn('more','대화 메뉴','chat-menu')}`;}
@@ -243,21 +244,26 @@ function renderChat(){
 }
 function autosize(){const el=$('input');if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,240)+'px';}
 const queuePending=()=>S.detail?.queue||[];
+const followupModes={},steeringAttempts={};
+const steeringMode=()=>!!S.sid&&runActive()&&followupModes[S.sid]?.mode==='steer'&&followupModes[S.sid]?.runId===latestRun()?.id;
+const canSteer=()=>!!latestRun()?.steer_supported&&latestRun()?.status==='running'&&!latestRun()?.create_image;
+const hasSteerRetry=()=>!!S.sid&&!!steeringAttempts[S.sid]&&steeringAttempts[S.sid].rawText===($('input')?.value||'');
 const enqueueMode=()=>runActive()||queuePending().length>0;
 const REASONING_LABELS={default:'기본',none:'꺼짐',minimal:'최소',low:'낮음',medium:'보통',high:'높음',xhigh:'매우 높음',max:'Max',ultra:'Ultra'};
-const reasoningValues={},reasoningVersions={},modelValues={},modelVersions={};
+const reasoningValues={},reasoningVersions={},modelValues={},modelVersions={},modeValues={},modeVersions={};
 const reasoningEligible=p=>!!p&&(p.kind==='codex'||(p.kind==='openai'&&String(p.base_url||'').replace(/\/+$/,'')==='https://openrouter.ai/api/v1'));
 function sessionReasoning(){return S.sid?(S.detail?.session?.reasoning_effort||reasoningValues[S.sid]||S.data?.sessions?.find(s=>s.id===S.sid)?.reasoning_effort||'default'):(S.newReasoning||'default');}
 const ACCESS_LABELS={manual:'매번 승인',auto_approve:'자동 승인',full_access:'전체 접근'};
 function sessionAccess(){return S.sid?(S.detail?.session?.access_mode||accessValues[S.sid]||S.data?.sessions?.find(s=>s.id===S.sid)?.access_mode||'inherit'):(S.newAccess||'inherit');}
 function accessLabel(){const mode=sessionAccess(),effective=mode==='inherit'?(S.data?.settings?.access_mode||'manual'):mode;return `${mode==='inherit'?'기본 · ':''}${ACCESS_LABELS[effective]||ACCESS_LABELS.manual}`;}
 const fileReads={};
-const canSend=()=>!S.sending&&!S.accessSaving&&!S.reasoningSaving&&!S.modelSaving&&!fileReads[draftKey()]&&!!(($('input')?.value||'').trim()||attachments().length);
+const canSend=()=>!S.sending&&!S.accessSaving&&!S.reasoningSaving&&!S.modelSaving&&!S.modeSaving&&(!steeringMode()||canSteer()||(hasSteerRetry()&&steeringAttempts[S.sid].runId===latestRun()?.id))&&!fileReads[draftKey()]&&!!(($('input')?.value||'').trim()||attachments().length);
 function syncSend(){const b=$('send');if(b)b.disabled=!canSend();}
 function wireComposer(){
  const input=$('input'),form=$('composer');
- input.addEventListener('input',()=>{S.drafts[draftKey()]=input.value;autosize();syncSend();});
- input.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing&&ev.keyCode!==229){ev.preventDefault();send();}});
+ input.addEventListener('input',()=>{const changed=S.sid&&steeringAttempts[S.sid]&&steeringAttempts[S.sid].rawText!==input.value;if(changed)delete steeringAttempts[S.sid];S.drafts[draftKey()]=input.value;autosize();syncSend();if(changed)renderTools();updateFileMention(input);});
+ input.addEventListener('click',()=>updateFileMention(input));
+ input.addEventListener('keydown',ev=>{if(fileMentionKey(ev))return;if(ev.key==='Enter'&&!ev.shiftKey&&!ev.isComposing&&ev.keyCode!==229){ev.preventDefault();send();}});
  form.addEventListener('submit',ev=>{ev.preventDefault();send();});
  $('file-input').addEventListener('change',ev=>{addFiles([...ev.target.files]);ev.target.value='';});
  form.addEventListener('dragover',ev=>{if([...ev.dataTransfer.types].includes('Files')){ev.preventDefault();form.classList.add('drag');}});
@@ -268,14 +274,15 @@ function wireComposer(){
 function renderTools(){
  const el=$('tools');if(!el)return;const active=runActive(),sk=selectedSkills();
  el.innerHTML=`${iconBtn('clip','파일 첨부','attach')}
- <button type="button" class="chip ${S.imageModes[draftKey()]?'on':''}" data-act="image-mode" aria-pressed="${!!S.imageModes[draftKey()]}" title="이미지 만들기"${S.sending?' disabled':''}>${icon('image')}<span>${S.imageModes[draftKey()]?'이미지 · '+esc(S.imageModes[draftKey()].model==='__default__'?'ChatGPT':S.imageModes[draftKey()].model):'이미지 만들기'}</span></button>
+ <button type="button" class="chip ${S.imageModes[draftKey()]?'on':''}" data-act="image-mode" aria-pressed="${!!S.imageModes[draftKey()]}" title="이미지 만들기"${S.sending||S.mode==='plan'?' disabled':''}>${icon('image')}<span>${S.imageModes[draftKey()]?'이미지 · '+esc(S.imageModes[draftKey()].model==='__default__'?'ChatGPT':S.imageModes[draftKey()].model):'이미지 만들기'}</span></button>
  <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="dialog" title="모델 바꾸기"${active||S.modelSaving||S.reasoningSaving?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
  <button type="button" class="chip reasoning-chip ${sessionReasoning()!=='default'?'on':''}" id="reasoning-chip" data-act="reasoning-menu" aria-haspopup="dialog" aria-label="추론 강도: ${esc(REASONING_LABELS[sessionReasoning()]||'기본')}" title="추론 강도"${(!reasoningEligible(provider())||S.imageModes[draftKey()]||S.sending||S.reasoningSaving||S.modelSaving||(S.sid&&!S.detail))?' disabled':''}>${icon('bolt')}<span>${esc(REASONING_LABELS[sessionReasoning()]||'기본')}</span>${icon('caret','caret')}</button>
- <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button></div>
+ ${hasSteerRetry()&&!S.sending?`<div class="seg" role="group" aria-label="추가 지시 전송 확인"><button type="button" aria-pressed="true" title="같은 요청을 다시 확인해요">전송 재확인</button><button type="button" data-act="followup-mode" data-mode="${active?'queue':'new'}">${active?'대기열':'새 메시지'}</button></div>`:active?`<div class="seg" role="group" aria-label="진행 중 메시지 방식"><button type="button" data-act="followup-mode" data-mode="steer" aria-pressed="${steeringMode()}"${!canSteer()||S.sending?' disabled':''} title="다음 모델 호출에서 추가 지시를 반영해요">추가 지시</button><button type="button" data-act="followup-mode" data-mode="queue" aria-pressed="${!steeringMode()}"${S.sending?' disabled':''} title="현재 작업이 끝나면 새 메시지로 실행해요">대기열</button></div>`:`<div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${S.modeSaving||S.sending?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${S.modeSaving||S.sending?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button><button type="button" data-act="mode" data-mode="plan" aria-pressed="${S.mode==='plan'}"${S.modeSaving||S.sending?' disabled':''} title="읽고 조사한 뒤 계획을 세워요">계획</button></div>`}
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+'개'}</span>`:''}</button>
  <button type="button" class="chip access-chip" data-act="session-access" aria-haspopup="dialog" aria-label="이 대화의 도구 승인: ${esc(accessLabel())}" title="이 대화의 도구 승인"${S.sending||S.accessSaving||(S.sid&&!S.detail)?' disabled':''}><span>${esc(accessLabel())}</span>${icon('caret','caret')}</button>
+ ${hasSteerRetry()&&!S.sending?'<span class="followup-hint">전송 여부를 다시 확인해 주세요</span>':steeringMode()?`<span class="followup-hint">${canSteer()?'다음 모델 호출 때 전달 · 실행 중인 도구는 계속':'지금은 추가 지시를 받을 수 없어요'}</span>`:active&&!canSteer()?'<span class="followup-hint">현재 작업은 대기열만 지원해요</span>':''}
  <span class="grow"></span>
- ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:''}<button type="submit" class="send" id="send" title="${enqueueMode()?'대기열에 추가':'보내기'}" aria-label="${enqueueMode()?'대기열에 추가':'보내기'}"${canSend()?'':' disabled'}>${icon('up')}</button>`; if(pop&&pop.anchor?.id==='reasoning-chip'){pop.anchor=$('reasoning-chip');placePop();}
+ ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:''}<button type="submit" class="send" id="send" title="${hasSteerRetry()&&!S.sending?'추가 지시 전송 재확인':steeringMode()?'추가 지시 보내기':enqueueMode()?'대기열에 추가':'보내기'}" aria-label="${hasSteerRetry()&&!S.sending?'추가 지시 전송 재확인':steeringMode()?'추가 지시 보내기':enqueueMode()?'대기열에 추가':'보내기'}"${canSend()?'':' disabled'}>${icon('up')}</button>`; if(pop&&pop.anchor?.id==='reasoning-chip'){pop.anchor=$('reasoning-chip');placePop();}
 }
 function queueHTML(items,paused,active,error){
  if(!items.length)return '';
@@ -323,8 +330,10 @@ function renderThread(toBottom=false){
  const items=[...d.messages.map(m=>({t:m.created_at,k:0,v:m})),...d.runs.map(r=>({t:r.started_at,k:1,v:r}))].sort((a,b)=>a.t<b.t?-1:a.t>b.t?1:a.k-b.k);
  const lastAssistant=[...d.messages].reverse().find(m=>m.role==='assistant');
  const lastMsg=d.messages[d.messages.length-1];const latest=latestRun();
- chat.classList.toggle('agent-running',latest?.mode==='agent'&&latest?.status==='running');
+ chat.classList.toggle('agent-running',['agent','plan'].includes(latest?.mode)&&latest?.status==='running');
+ const focused=document.activeElement?.matches?.('[data-question-input]')?document.activeElement:null,focusId=focused?.dataset.questionInput,selection=focused?[focused.selectionStart,focused.selectionEnd]:null;
  col.innerHTML=items.map(it=>it.k===0?messageHTML(it.v,it.v===lastAssistant&&it.v===lastMsg&&!runActive()):runHTML(it.v,it.v===latest)).join('');
+ if(focusId){const input=col.querySelector(`[data-question-input="${CSS.escape(focusId)}"]`);if(input){input.focus();if(selection)input.setSelectionRange(selection[0],selection[1]);}}
  if(toBottom||near)scroll.scrollTop=scroll.scrollHeight;
 }
 function setEmpty(on){
@@ -334,8 +343,9 @@ function setEmpty(on){
 }
 function messageHTML(m,isLast){
  S.msgs.set(String(m.id),m.content);
- if(m.role==='user'){const {text,files}=splitAttachments(m.content);return `<div class="u"><div class="bubble"><span class="selectable-message">${esc(text.trim())}</span>${imageHTML(m.images)}${files.length?`<span class="att">${files.map(esc).join(', ')}</span>`:''}</div></div>`;}
- return `<article class="a ${isLast?'last':''}"><div class="md selectable-message">${markdown(m.content)}</div><div class="acts">${iconBtn('copy','복사','copy-msg',m.id)}${isLast&&!m.create_image?iconBtn('retry','다시 답하기','regenerate',m.id):''}${iconBtn('memory','메모리로 저장','save-memory',m.id)}${iconBtn('skill','스킬로 저장','save-skill',m.id)}</div></article>`;
+ if(m.role==='user'){const {text,files}=splitAttachments(m.content);const steer=m.kind==='steering'?(S.detail?.steering||[]).find(x=>String(x.id)===String(m.steering_id)):null,run=steer?(S.detail?.runs||[]).find(r=>r.id===steer.run_id):null,label=steer?(steer.status==='applied'?'모델에 전달됨':run&&ACTIVE.includes(run.status)?'반영 대기':'미반영'):'';return `<div class="u">${iconBtn('fork','여기서 새 대화로 분기','fork-message',m.id)}<div class="bubble"><span class="selectable-message">${esc(text.trim())}</span>${imageHTML(m.images)}${files.length?`<span class="att">${files.map(esc).join(', ')}</span>`:''}${label?`<span class="steer-state">추가 지시 · ${label}</span>`:''}</div></div>`;}
+ const images=(S.detail?.artifacts||[]).filter(a=>a.image_generated&&String(a.message_id||'')===String(m.id));
+ return `<article class="a ${isLast?'last':''}"><div class="md selectable-message">${markdown(m.content)}</div>${generatedImageList(images)}<div class="acts">${iconBtn('copy','복사','copy-msg',m.id)}${isLast&&!m.create_image?iconBtn('retry','다시 답하기','regenerate',m.id):''}${iconBtn('fork','여기서 새 대화로 분기','fork-message',m.id)}${iconBtn('memory','메모리로 저장','save-memory',m.id)}${iconBtn('skill','스킬로 저장','save-skill',m.id)}</div></article>`;
 }
 let selectionReply=null,selectionButton=null;
 function hideSelectionReply(){selectionReply=null;if(selectionButton)selectionButton.hidden=true;}
@@ -390,6 +400,7 @@ function stepLabel(name,a,r){
   case 'fetch_url':return {icon:'globe',what:'웹 읽기',target:host(a.url)};
   case 'browser_search':case 'web_search':case 'web_search_call':return {icon:'search',what:'웹 검색',target:a.query||''};
   case 'browser_read':return {icon:'globe',what:'브라우저',target:host(a.url)};
+  case 'ask_user':return {icon:'chat',what:'질문',target:a.question||''};
   case 'file_change':return {icon:'pen',what:'파일 변경',target:Array.isArray(a.changes)?a.changes.map(c=>base(c.path)).join(', '):''};
   default:return {icon:'bolt',what:name,target:''};
  }
@@ -432,6 +443,18 @@ function approvalHTML(a){
  const glyph=a.tool==='run_command'?'terminal':a.tool==='edit_file'?'pen':a.tool==='load_skill'?'skill':'doc';
  return `<div class="approve" role="group" aria-label="실행 전 확인"><div class="head">${icon(glyph)}<h4>${esc(title)}</h4></div>${where?`<p class="where">${esc(where)}</p>`:''}${warn?`<p class="warn">${warn}</p>`:''}${body}<div class="row"><button type="button" class="btn ghost" data-approval="${esc(a.id)}" data-decision="deny">거절</button><span class="grow"></span>${['search_sessions','git_diff','load_skill'].includes(a.tool)?'':`<button type="button" class="btn" data-approval="${esc(a.id)}" data-decision="approve_all" title="이번 작업에서 같은 종류는 다시 묻지 않아요">모두 허용</button>`}<button type="button" class="btn primary" data-approval="${esc(a.id)}" data-decision="approve" title="허용 (⌘⏎)">허용</button></div></div>`;
 }
+const questionDrafts={},questionSending=new Set();
+function questionHTML(a){
+ const args=a.arguments||{},options=Array.isArray(args.options)?args.options.slice(0,4):[],disabled=questionSending.has(String(a.id));
+ return `<div class="question-card" role="group" aria-label="Naru의 질문"><strong>${esc(args.question||'답변을 입력해 주세요.')}</strong>${options.length?`<div class="question-options">${options.map((option,i)=>`<button type="button" class="btn" data-act="answer-option" data-id="${esc(a.id)}" data-index="${i}"${disabled?' disabled':''}>${esc(option)}</button>`).join('')}</div>`:''}<div class="question-answer"><textarea data-question-input="${esc(a.id)}" aria-label="답변" placeholder="직접 답변하기" maxlength="4000" rows="2"${disabled?' disabled':''}>${esc(questionDrafts[a.id]||'')}</textarea><button type="button" class="btn primary" data-act="answer-question" data-id="${esc(a.id)}"${disabled?' disabled':''}>답변 보내기</button></div></div>`;
+}
+async function answerQuestion(id,answer){
+ const sid=S.sid,epoch=S.epoch,run=latestRun(),question=S.detail?.approvals?.find(a=>String(a.id)===String(id)&&a.run_id===run?.id&&a.status==='pending'&&a.kind==='question');
+ if(!question||!ACTIVE.includes(run?.status)||questionSending.has(String(id)))return;
+ answer=String(answer||'').trim();if(!answer||answer.length>4000)throw new Error('답변을 1~4,000자로 입력해 주세요.');
+ questionSending.add(String(id));try{await api(`/api/questions/${enc(id)}`,{method:'POST',body:{answer}});delete questionDrafts[id];if(S.sid===sid&&S.epoch===epoch)await loadDetail();}
+ finally{questionSending.delete(String(id));}
+}
 function runHTML(run,isLatest){
  const d=S.detail,events=d.events.filter(e=>e.run_id===run.id),steps=buildSteps(events),active=ACTIVE.includes(run.status);
  const pending=d.approvals.filter(a=>a.run_id===run.id&&a.status==='pending'&&active);
@@ -440,12 +463,12 @@ function runHTML(run,isLatest){
  let html=`<section class="run" data-run="${esc(run.id)}">`;
  if(steps.length){
   if(!active){const t=duration(run);html+=`<button type="button" class="summary" data-act="toggle-run" data-id="${esc(run.id)}" aria-expanded="${expanded}">${icon('chevron')}<span>${tools?`작업 ${tools}단계`:'진행 기록'}</span>${t?`<span class="time">${t}</span>`:''}</button>`;}
-  if(expanded)html+=`<div class="steps">${steps.map(stepHTML).join('')}</div>`;
+  if(expanded)html+=`<div class="steps">${steps.filter(step=>step.name!=='ask_user'||step.done).map(stepHTML).join('')}</div>`;
  }
  if(active){
   const status=isLatest?agentStatusHTML(run,events):'';
   html+=status;
-  html+=pending.map(approvalHTML).join('');
+  html+=pending.map(a=>a.kind==='question'?questionHTML(a):approvalHTML(a)).join('');
   const text=S.detail.live?.run_id===run.id?S.live:'';
   html+=`<div class="md" id="live">${text?markdown(text):''}</div>`;
   if(!text&&!pending.length&&!status)html+='<div class="waiting" id="waiting"><span class="thinking-dots" role="img" aria-label="작업 중"><i></i><i></i><i></i></span></div>';
@@ -457,20 +480,19 @@ function runHTML(run,isLatest){
  return html+'</section>';
 }
 function agentStatusHTML(run,events){
- if(!run||!ACTIVE.includes(run.status)||run.mode!=='agent'||run.create_image)return '';
+ if(!run||!ACTIVE.includes(run.status)||!['agent','plan'].includes(run.mode)||run.create_image)return '';
  let text='작업 중';
  if(run.status==='awaiting_approval')text='승인 대기';
+ else if(run.status==='awaiting_user')text='답변 대기';
  else{
   const latest=[...events].reverse().find(e=>['status','tool_call','tool_result'].includes(e.type));
   if(latest?.type==='status'&&typeof latest.data?.text==='string'&&latest.data.text.trim())text=latest.data.text.trim();
   else if(latest?.type==='tool_call')text='도구 실행 중';
  }
- return `<div class="agent-status" role="status" aria-live="polite"><span class="agent-status-indicator${run.status==='awaiting_approval'?' attention':''}" aria-hidden="true"></span><span>${esc(text.slice(0,160))}</span></div>`;
+ return `<div class="agent-status" role="status" aria-live="polite"><span class="agent-status-indicator${['awaiting_approval','awaiting_user'].includes(run.status)?' attention':''}" aria-hidden="true"></span><span>${esc(text.slice(0,160))}</span></div>`;
 }
-function generatedImagesHTML(run,artifacts){
- const images=artifacts.filter(a=>a.image_generated&&String(a.run_id)===String(run.id));
- return images.map(a=>{const url=`/api/artifacts/${enc(a.id)}/download`,name=esc(a.name||'생성된 이미지');return `<figure class="generated-image"><button type="button" data-artifact="${esc(a.id)}" aria-label="${name} 크게 보기"><img src="${url}?inline=1" alt="${name}" loading="lazy"></button><a href="${url}" download aria-label="${name} 내려받기">${icon('download')}<span>내려받기</span></a></figure>`;}).join('');
-}
+function generatedImageList(images){return images.map(a=>{const url=`/api/artifacts/${enc(a.id)}/download`,name=esc(a.name||'생성된 이미지');return `<figure class="generated-image"><button type="button" data-artifact="${esc(a.id)}" aria-label="${name} 크게 보기"><img src="${url}?inline=1" alt="${name}" loading="lazy"></button><a href="${url}" download aria-label="${name} 내려받기">${icon('download')}<span>내려받기</span></a></figure>`;}).join('');}
+function generatedImagesHTML(run,artifacts){return generatedImageList(artifacts.filter(a=>a.image_generated&&String(a.run_id)===String(run.id)));}
 function paintLive(){
  const el=$('live');if(!el){renderThread();return;}
  const scroll=$('thread'),near=scroll&&scroll.scrollHeight-scroll.scrollTop-scroll.clientHeight<140;
@@ -517,10 +539,25 @@ async function selectSession(id){
  try{await loadDetail();if(epoch===S.epoch)$('input')?.focus({preventScroll:true});}
  catch(err){if(epoch===S.epoch){toast(err.message,true);newChat();}}
 }
+const forksPending=new Set();
+async function forkMessage(messageId){
+ const sid=S.sid,epoch=S.epoch;
+ if(!sid||S.view!=='chat'||!S.detail?.messages?.some(m=>String(m.id)===String(messageId))||forksPending.has(sid))return;
+ forksPending.add(sid);
+ try{
+  const result=await api(`/api/sessions/${enc(sid)}/fork`,{method:'POST',body:{message_id:messageId}}),session=result.session;
+  if(!session?.id)throw new Error('새 대화를 만들지 못했어요.');
+  if(S.data?.sessions&&!S.data.sessions.some(s=>s.id===session.id))S.data.sessions.unshift(session);
+  renderSide();
+  if(S.sid===sid&&S.epoch===epoch&&S.view==='chat')await selectSession(session.id);
+  else toast('분기한 대화를 목록에 추가했어요.');
+  refreshState().then(()=>renderSide()).catch(()=>{});
+ }finally{forksPending.delete(sid);}
+}
 function newChat(){S.epoch++;S.view='chat';S.sid=null;S.detail=null;S.live='';remember(null);closePop();closeSide();renderAll();$('input')?.focus();}
 let lastFull=0;const accessVersions={},accessValues={};
 async function loadDetail(timeout){
- const sid=S.sid,epoch=S.epoch;if(!sid)return;const accessVersion=accessVersions[sid]||0,reasoningVersion=reasoningVersions[sid]||0,modelVersion=modelVersions[sid]||0,revision=titleRevision;
+ const sid=S.sid,epoch=S.epoch;if(!sid)return;const accessVersion=accessVersions[sid]||0,reasoningVersion=reasoningVersions[sid]||0,modelVersion=modelVersions[sid]||0,modeVersion=modeVersions[sid]||0,revision=titleRevision;
  const d=await api(`/api/sessions/${enc(sid)}`,{timeout});
  if(sid!==S.sid||epoch!==S.epoch)return;
  if(d.session&&manualTitles[sid]?.revision>revision)d.session.title=manualTitles[sid].title;
@@ -529,6 +566,7 @@ async function loadDetail(timeout){
  if(((reasoningVersions[sid]||0)!==reasoningVersion||S.modelSaving)&&d.session&&reasoningValues[sid])d.session.reasoning_effort=reasoningValues[sid];
  else if(d.session)reasoningValues[sid]=d.session.reasoning_effort||'default';
  if(d.session&&modelValues[sid]&&((modelVersions[sid]||0)!==modelVersion||S.modelSaving))Object.assign(d.session,modelValues[sid]);
+ if(d.session&&modeValues[sid]&&((modeVersions[sid]||0)!==modeVersion||(S.modeSaving&&S.modeSaveSid===sid)))d.session.mode=modeValues[sid];
  const before=latestRun();lastFull=Date.now();
  S.detail=d;S.live=d.live?.text||'';
  if(providerById(d.session.provider_id)&&!S.sending&&!S.modelSaving){S.providerId=d.session.provider_id;S.model=d.session.model||'';S.mode=d.session.mode||S.mode;}
@@ -540,6 +578,7 @@ async function loadDetail(timeout){
 function onTransition(before,after){
  const title=S.detail?.session?.title||'Naru';
  if(after==='awaiting_approval')notify('확인이 필요해요',title);
+ if(after==='awaiting_user')notify('답변이 필요해요',title);
  if(ACTIVE.includes(before)&&!ACTIVE.includes(after)){
   if(after==='completed')notify('작업을 마쳤어요',title);else if(after==='failed')notify('작업이 멈췄어요',title);
   refreshState().then(()=>renderSide()).catch(()=>{});
@@ -557,9 +596,26 @@ async function enableNotifications(){
  await Notification.requestPermission();
  const section=$('notification-setting');if(section)section.innerHTML=notificationHTML();
 }
+async function sendSteering(input,rawText){
+ const sid=S.sid,epoch=S.epoch,key=draftKey(),run=latestRun(),content=rawText.trim(),retry=hasSteerRetry()?steeringAttempts[sid]:null,runId=retry?.runId||run?.id;
+ if(!sid||!runId||(!retry&&!canSteer())){toast('지금은 추가 지시를 받을 수 없어요. 대기열을 선택해 주세요.',true);return;}
+ if(attachments().length||S.imageModes[key]){toast('추가 지시는 텍스트만 보낼 수 있어요. 첨부를 빼거나 대기열을 선택해 주세요.',true);return;}
+ if(!content||content.length>10000){toast('추가 지시는 1~10,000자로 입력해 주세요.',true);return;}
+ let attempt=steeringAttempts[sid];
+ if(!attempt||attempt.runId!==runId||attempt.rawText!==rawText)attempt=steeringAttempts[sid]={runId,rawText,requestId:crypto.randomUUID()};
+ S.sending=true;renderTools();
+ try{
+  await api(`/api/runs/${enc(runId)}/steer`,{method:'POST',body:{content,request_id:attempt.requestId}});
+  if(steeringAttempts[sid]===attempt)delete steeringAttempts[sid];
+  if(S.drafts[key]===rawText)delete S.drafts[key];
+  if(S.sid===sid&&S.epoch===epoch&&$('input')===input){if(input.value===rawText)input.value='';autosize();await loadDetail();}
+ }catch(err){if(S.sid===sid&&S.epoch===epoch)toast(err.message,true);}
+ finally{S.sending=false;if(S.view==='chat')renderTools();}
+}
 async function send(){
  const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
- if((!text&&!files.length)||S.sending||S.accessSaving||S.reasoningSaving||S.modelSaving||fileReads[draftKey()])return;
+ if((!text&&!files.length)||S.sending||S.accessSaving||S.reasoningSaving||S.modelSaving||S.modeSaving||fileReads[draftKey()])return;
+ if(steeringMode()||hasSteerRetry()){await sendSteering(input,rawText);return;}
  if(S.imageModes[draftKey()]&&!text){toast('만들 이미지의 설명을 입력해 주세요.',true);return;}
  if(S.imageModes[draftKey()]&&files.some(f=>f.mime)){toast('첨부한 이미지 편집은 아직 지원하지 않아요. 이미지를 빼고 생성해 주세요.',true);return;}
  const creatingImage=!!S.imageModes[draftKey()],selected=provider(),p=selected||(creatingImage?providerById(S.imageModes[draftKey()].providerId):null);
@@ -588,6 +644,66 @@ async function send(){
   refreshState().then(()=>renderSide()).catch(()=>{});
  }catch(err){if(sid&&S.sid===sid&&S.epoch===epoch&&!S.detail)try{await loadDetail();}catch{}if(S.data?.sessions)renderSide();toast(err.message,true);}
  finally{S.sending=false;if(S.view==='chat')renderTools();}
+}
+
+// ---------- workspace file mentions ----------
+let fileMention=null,mentionSerial=0,mentionTimer=null;
+function mentionAt(input){
+ if(input.selectionStart!==input.selectionEnd)return null;
+ const before=input.value.slice(0,input.selectionStart),m=before.match(/(?:^|\s)@([^\s@]*)$/);
+ return m?{query:m[1],start:input.selectionStart-m[1].length-1,end:input.selectionStart}:null;
+}
+function updateFileMention(input){
+ const token=mentionAt(input);
+ if(S.view!=='chat'||$('input')!==input||!token){if(fileMention&&pop?.el===fileMention.el)closePop();fileMention=null;clearTimeout(mentionTimer);return;}
+ const sid=S.sid,epoch=S.epoch,key=draftKey(),workspace=S.data?.settings?.workspace||'';
+ if(!workspace)return;
+ if(!fileMention||pop?.el!==fileMention.el||fileMention.input!==input){
+  const el=openPop(input,'<div class="loading" role="status">파일 이름을 입력하세요</div>',{width:320,onPick:(_kind,button)=>selectContextFile(fileMention?.files[Number(button.dataset.index)],fileMention)});
+  el.setAttribute('role','listbox');el.setAttribute('aria-label','작업 폴더 파일');el.addEventListener('pointerdown',ev=>ev.preventDefault());
+  fileMention={el,input,sid,epoch,key,workspace,files:[],selected:0};
+ }
+ const menu=fileMention;Object.assign(menu,token,{sid,epoch,key,workspace,files:[],selected:0});
+ const request=++mentionSerial;clearTimeout(mentionTimer);
+ if(!token.query){menu.el.innerHTML='<div class="loading" role="status">파일 이름을 입력하세요</div>';placePop();return;}
+ menu.el.innerHTML='<div class="loading" role="status">파일 찾는 중…</div>';placePop();
+ mentionTimer=setTimeout(async()=>{
+  try{
+   const result=await api(`/api/context/files?q=${enc(token.query)}`);
+   if(request!==mentionSerial||fileMention!==menu||pop?.el!==menu.el||S.sid!==sid||S.epoch!==epoch||S.data?.settings?.workspace!==workspace)return;
+   if(result.workspace!==workspace)throw new Error('작업 폴더가 바뀌었어요. 다시 검색해 주세요.');
+   menu.files=Array.isArray(result.files)?result.files.filter(x=>typeof x==='string'):[];
+   menu.el.innerHTML=menu.files.length?menu.files.map((path,i)=>`<button type="button" class="opt ${i===0?'hl':''}" role="option" aria-selected="${i===0}" data-pick="context-file" data-index="${i}">${icon('doc')}<span title="${esc(path)}">${esc(path)}</span></button>`).join('')+(result.truncated?'<div class="loading">검색어를 더 입력하세요</div>':''):'<div class="loading" role="status">일치하는 파일이 없어요</div>';
+   placePop();
+  }catch(err){if(request===mentionSerial&&fileMention===menu&&pop?.el===menu.el){menu.el.innerHTML=`<div class="loading" role="alert">${esc(err.message)}</div>`;placePop();}}
+ },160);
+}
+function fileMentionKey(ev){
+ const menu=fileMention;if(!menu||pop?.el!==menu.el||ev.isComposing||ev.keyCode===229)return false;
+ if(ev.key==='Escape'){ev.preventDefault();ev.stopPropagation();closePop();fileMention=null;return true;}
+ if(!menu.files.length){if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();ev.stopPropagation();return true;}return false;}
+ if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){
+  ev.preventDefault();ev.stopPropagation();menu.selected=(menu.selected+(ev.key==='ArrowDown'?1:-1)+menu.files.length)%menu.files.length;
+  menu.el.querySelectorAll('[data-index]').forEach((el,i)=>{el.classList.toggle('hl',i===menu.selected);el.setAttribute('aria-selected',String(i===menu.selected));});return true;
+ }
+ if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();ev.stopPropagation();selectContextFile(menu.files[menu.selected],menu);return true;}
+ return false;
+}
+async function selectContextFile(path,menu){
+ if(!path||!menu||fileMention!==menu||pop?.el!==menu.el)return;
+ const {sid,epoch,key,workspace,input,start,end,query}=menu,raw=input.value;
+ if(S.sid!==sid||S.epoch!==epoch||raw.slice(start,end)!=='@'+query)return;
+ closePop();fileMention=null;fileReads[key]=(fileReads[key]||0)+1;syncSend();
+ try{
+  const result=await api('/api/context/read',{method:'POST',body:{path,workspace}});
+  if(S.sid!==sid||S.epoch!==epoch||S.data?.settings?.workspace!==workspace||$('input')!==input||input.value!==raw)return;
+  if(typeof result.text!=='string'||typeof result.name!=='string'||result.path!==path||result.workspace!==workspace)throw new Error('파일을 읽지 못했어요.');
+  const current=[...(S.files[key]||[]),{name:result.name,size:result.size,text:result.text}];
+  if(current.length>5)throw new Error('파일은 한 번에 5개까지 첨부할 수 있어요.');
+  if(current.reduce((n,f)=>n+(f.text?.length||0),0)>90000)throw new Error('첨부 내용은 합쳐서 90,000자 이하여야 해요.');
+  S.files[key]=current;input.value=raw.slice(0,start)+raw.slice(end);S.drafts[key]=input.value;input.setSelectionRange(start,start);autosize();renderChips();input.focus();
+ }catch(err){if(S.sid===sid&&S.epoch===epoch)toast(err.message,true);}
+ finally{fileReads[key]--;if(!fileReads[key])delete fileReads[key];if(draftKey()===key)syncSend();}
 }
 
 // ---------- popovers ----------
@@ -745,7 +861,7 @@ function deleteChat(id=S.sid){
  confirmDialog(`“${title}” 대화를 삭제할까요?`,'대화, 실행 기록과 대기 메시지가 삭제돼요. 만든 파일은 그대로 남아요.','삭제',async()=>{
   await api(`/api/sessions/${enc(id)}`,{method:'DELETE'});
   deletedSessionIds.add(String(id));
-  delete S.drafts[id];delete S.files[id];delete S.imageModes[id];delete accessValues[id];delete accessVersions[id];delete reasoningValues[id];delete reasoningVersions[id];delete modelValues[id];delete modelVersions[id];delete manualTitles[id];
+  delete S.drafts[id];delete S.files[id];delete S.imageModes[id];delete accessValues[id];delete accessVersions[id];delete reasoningValues[id];delete reasoningVersions[id];delete modelValues[id];delete modelVersions[id];delete modeValues[id];delete modeVersions[id];delete followupModes[id];delete steeringAttempts[id];delete manualTitles[id];
   if(S.data?.sessions)S.data.sessions=S.data.sessions.filter(s=>String(s.id)!==String(id));
   if(S.data?.active)delete S.data.active[id];
   if(S.sid===id){if(S.view==='chat')newChat();else{S.epoch++;S.sid=null;S.detail=null;S.live='';remember(null);renderSide();renderTop();}}
@@ -969,12 +1085,12 @@ function renderSkills(){
 }
 function renderWorkflows(){
  const list=S.data.workflows||[];
- $('main').innerHTML=page('작업 흐름',`<p class="lead">선택한 모델로 새 대화를 시작해요. 모델 사용량과 도구 승인 설정이 적용돼요.</p><div class="panel design-grid">${list.length?list.map(w=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('bolt')}</span><div class="txt"><div class="name">${esc(w.name)} <span class="badge neutral">${w.mode==='agent'?'에이전트':'대화'}</span></div></div><div class="acts2"><button type="button" class="btn primary sm" data-act="run-workflow" data-id="${esc(w.id)}">실행</button>${iconBtn('edit','편집','edit-workflow',w.id)}${iconBtn('trash','삭제','delete-workflow',w.id)}</div></div>`).join(''):'<div class="blank"><p>저장된 작업 흐름이 없어요.</p></div>'}</div>`,`<button type="button" class="btn primary" data-act="add-workflow">${icon('plus')}작업 흐름 만들기</button>`);
+ $('main').innerHTML=page('작업 흐름',`<p class="lead">선택한 모델로 새 대화를 시작해요. 모델 사용량과 도구 승인 설정이 적용돼요.</p><div class="panel design-grid">${list.length?list.map(w=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('bolt')}</span><div class="txt"><div class="name">${esc(w.name)} <span class="badge neutral">${w.mode==='agent'?'에이전트':w.mode==='plan'?'계획':'대화'}</span></div></div><div class="acts2"><button type="button" class="btn primary sm" data-act="run-workflow" data-id="${esc(w.id)}">실행</button>${iconBtn('edit','편집','edit-workflow',w.id)}${iconBtn('trash','삭제','delete-workflow',w.id)}</div></div>`).join(''):'<div class="blank"><p>저장된 작업 흐름이 없어요.</p></div>'}</div>`,`<button type="button" class="btn primary" data-act="add-workflow">${icon('plus')}작업 흐름 만들기</button>`);
 }
 function editWorkflow(id){
  const item=id?(S.data.workflows||[]).find(w=>String(w.id)===String(id)):null;if(id&&!item)return;
  const w=item||{name:'',prompt:'',mode:'agent'};
- openDialog(id?'작업 흐름 편집':'작업 흐름 만들기',`<form class="form" id="workflow-form"><div class="field"><label for="wf-name">이름</label><input id="wf-name" name="name" maxlength="100" required value="${esc(w.name)}"></div><div class="field"><label for="wf-prompt">지침</label><textarea id="wf-prompt" name="prompt" rows="7" maxlength="20000" required>${esc(w.prompt)}</textarea></div><div class="field"><label for="wf-mode">작업 방식</label><select id="wf-mode" name="mode"><option value="agent"${w.mode==='agent'?' selected':''}>에이전트</option><option value="chat"${w.mode==='chat'?' selected':''}>대화</option></select></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{wide:true});
+ openDialog(id?'작업 흐름 편집':'작업 흐름 만들기',`<form class="form" id="workflow-form"><div class="field"><label for="wf-name">이름</label><input id="wf-name" name="name" maxlength="100" required value="${esc(w.name)}"></div><div class="field"><label for="wf-prompt">지침</label><textarea id="wf-prompt" name="prompt" rows="7" maxlength="20000" required>${esc(w.prompt)}</textarea></div><div class="field"><label for="wf-mode">작업 방식</label><select id="wf-mode" name="mode"><option value="agent"${w.mode==='agent'?' selected':''}>에이전트</option><option value="chat"${w.mode==='chat'?' selected':''}>대화</option><option value="plan"${w.mode==='plan'?' selected':''}>계획</option></select></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{wide:true});
  $('workflow-form').addEventListener('submit',ev=>{ev.preventDefault();const body=Object.fromEntries(new FormData(ev.target));submitForm(ev.target,async()=>{await api(id?`/api/workflows/${enc(id)}`:'/api/workflows',{method:id?'PATCH':'POST',body});await refreshState();closeDialog();if(S.view==='workflows')renderWorkflows();toast('저장했어요');});});
 }
 async function runWorkflow(id){
@@ -1091,6 +1207,7 @@ document.addEventListener('pointerdown',ev=>{if(selectionButton&&!selectionButto
 document.addEventListener('pointerup',ev=>{if(!selectionButton?.contains(ev.target))showSelectionReply();});
 document.addEventListener('keyup',ev=>{if(ev.shiftKey||ev.key==='Shift')showSelectionReply();});
 document.addEventListener('scroll',hideSelectionReply,true);
+document.addEventListener('input',ev=>{const input=ev.target.closest?.('[data-question-input]');if(input)questionDrafts[input.dataset.questionInput]=input.value;});
 const ACT={
  'new':()=>newChat(),
  'palette':()=>openPalette(),
@@ -1109,7 +1226,10 @@ const ACT={
  'reasoning-menu':()=>pop&&pop.anchor===$('reasoning-chip')?closePop():openReasoningMenu(),
  'skills-menu':()=>pop&&pop.anchor===$('skill-chip')?closePop():skillsMenu(),
  'session-access':()=>openSessionAccess(),
- 'mode':async el=>{S.mode=el.dataset.mode;renderTools();if(S.sid)try{await api(`/api/sessions/${enc(S.sid)}`,{method:'PATCH',body:{mode:S.mode}});}catch(err){toast(err.message,true);}},
+ 'mode':async el=>{if(S.modeSaving||S.sending)return;const sid=S.sid,epoch=S.epoch,key=draftKey(),previous=S.mode,oldImage=S.imageModes[key],mode=el.dataset.mode;S.mode=mode;if(mode==='plan')delete S.imageModes[key];if(sid){modeValues[sid]=mode;modeVersions[sid]=(modeVersions[sid]||0)+1;S.modeSaving=true;S.modeSaveSid=sid;if(S.detail?.session)S.detail.session.mode=mode;}renderTools();if(sid)try{await api(`/api/sessions/${enc(sid)}`,{method:'PATCH',body:{mode}});}catch(err){modeValues[sid]=previous;if(oldImage)S.imageModes[key]=oldImage;if(S.sid===sid&&S.epoch===epoch){S.mode=previous;if(S.detail?.session)S.detail.session.mode=previous;}toast(err.message,true);}finally{modeVersions[sid]=(modeVersions[sid]||0)+1;S.modeSaving=false;S.modeSaveSid=null;if(S.view==='chat')renderTools();}},
+ 'answer-option':async el=>{const q=S.detail?.approvals?.find(a=>String(a.id)===el.dataset.id);const answer=q?.arguments?.options?.[Number(el.dataset.index)];if(typeof answer==='string'){el.disabled=true;try{await answerQuestion(el.dataset.id,answer);}finally{if(el.isConnected)el.disabled=false;}}},
+ 'answer-question':async el=>{const input=el.closest('.question-card')?.querySelector('[data-question-input]');el.disabled=true;try{await answerQuestion(el.dataset.id,input?.value);}finally{if(el.isConnected)el.disabled=false;}} ,
+ 'followup-mode':el=>{if(!S.sid||S.sending)return;if(el.dataset.mode==='steer'&&!canSteer())return;if(el.dataset.mode!=='steer')delete steeringAttempts[S.sid];followupModes[S.sid]={mode:el.dataset.mode==='steer'?'steer':'queue',runId:latestRun()?.id};renderTools();},
  'queue-edit':el=>editQueue(el.dataset.id),
  'queue-remove':async el=>{const sid=S.sid;el.disabled=true;await api(`/api/sessions/${enc(sid)}/queue/${enc(el.dataset.id)}`,{method:'DELETE'});if(S.sid===sid)await loadDetail();},
  'queue-resume':async el=>{const sid=S.sid;el.disabled=true;await api(`/api/sessions/${enc(sid)}/queue/resume`,{method:'POST',body:{}});if(S.sid===sid)await loadDetail();refreshState().then(()=>renderSide()).catch(()=>{});},
@@ -1120,6 +1240,7 @@ const ACT={
  'toggle-step':el=>{const id=el.dataset.id;S.steps.has(id)?S.steps.delete(id):S.steps.add(id);renderThread();},
  'copy-code':el=>copyText(S.codes[+el.dataset.id]||''),
  'copy-msg':el=>copyText(S.msgs.get(el.dataset.id)||''),
+ 'fork-message':async el=>{el.disabled=true;try{await forkMessage(el.dataset.id);}finally{if(el.isConnected)el.disabled=false;}},
  'save-memory':el=>saveMemoryDialog(S.msgs.get(el.dataset.id)||''),
  'save-skill':el=>editSkill(null,S.msgs.get(el.dataset.id)||''),
  'close-dialog':()=>closeDialog(),
@@ -1226,7 +1347,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,renderTop,startRename,deleteChat,showSelectionReply,replyToSelection,sessionReasoning,saveReasoning,openReasoningMenu,setModel,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,ACT,renderSide,renderTop,startRename,deleteChat,forkMessage,showSelectionReply,replyToSelection,mentionAt,updateFileMention,fileMentionKey,selectContextFile,getFileMention:()=>fileMention,questionHTML,answerQuestion,sessionReasoning,saveReasoning,openReasoningMenu,setModel,steeringMode,sendSteering,S};return;}
 setInterval(tick,280);
 boot();
 })();
