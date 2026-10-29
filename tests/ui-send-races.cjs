@@ -20,6 +20,7 @@ S.accounts={codex:{available:true,authenticated:true}};S.providerId='p1';S.model
 const input=c.document.getElementById('input');input.value='first request';S.drafts.new=input.value;
 (async()=>{
  const pending=send();
+ assert.equal(requests[0].body.auto_title,true,'new message enables automatic naming');
  // Switching workspaces during the asynchronous session creation must not alter the request.
  S.epoch++;S.sid='other';S.providerId='p2';S.model='different';S.mode='chat';S.skillIds=['s2'];S.drafts.new='new unsent draft';
  session.resolve(response({id:'created'}));

@@ -216,8 +216,10 @@ function renderSide(){
  <nav class="sessions" aria-label="최근 대화">${d.sessions.map(s=>{const st=active[s.id],title=s.title||'새 대화';return `<div class="session-row"><button type="button" class="side-item" data-session="${esc(s.id)}" title="${esc(title)}"${S.view==='chat'&&S.sid===s.id?' aria-current="page"':''}><span>${esc(title)}</span>${st?`<i class="dot ${st==='awaiting_approval'?'att':''}" role="img" aria-label="${st==='awaiting_approval'?'확인 필요':'실행 중'}"></i>`:''}</button><button type="button" class="icon-btn session-delete" data-act="delete-chat" data-id="${esc(s.id)}" title="대화 삭제" aria-label="${esc(title)} 대화 삭제">${icon('trash')}</button></div>`;}).join('')}</nav>
  <nav class="side-nav" aria-label="관리">${S.update?.status==='ready'?`<button type="button" class="side-item update-ready" data-view="settings">${icon('download')}<span>업데이트 준비됨</span></button>`:''}${nav.map(([v,ic,t])=>`<button type="button" class="side-item" data-view="${v}"${S.view===v?' aria-current="page"':''}>${icon(ic)}<span>${t}</span></button>`).join('')}</nav>`;
 }
+let renaming=null;
 function renderTop(){
  const t=$('top');if(!t)return;
+ if(renaming&&S.view==='chat'&&renaming.sid===S.sid&&renaming.epoch===S.epoch)return;
  let html=`<button type="button" class="icon-btn menu-btn" data-act="open-side" aria-label="메뉴 열기">${icon('menu')}</button>`;
  if(S.sideHidden)html+=iconBtn('sidebar','사이드바 보기 (⌘\\)','toggle-side');
  const s=S.view==='chat'?S.detail?.session:null;
@@ -461,10 +463,16 @@ function ensureProvider(){
  S.providerId=ready?.id||'';S.model=ready?.model||'';
 }
 const deletedSessionIds=new Set();
+let stateRequest=0,stateApplied=0,titleRevision=0;const manualTitles={};
 async function refreshState(timeout){
+ const request=++stateRequest,revision=titleRevision;
  const d=await api('/api/state',{timeout});
+ if(request<stateApplied)return S.data;
+ stateApplied=request;
  if(d.sessions)d.sessions=d.sessions.filter(s=>!deletedSessionIds.has(String(s.id)));
+ for(const s of d.sessions||[]){const edit=manualTitles[s.id];if(edit&&edit.revision>revision)s.title=edit.title;}
  S.data=d;if(d.accounts)S.accounts=d.accounts;
+ const current=d.sessions?.find(s=>s.id===S.sid);if(S.view==='chat'&&current&&S.detail?.session&&S.detail.session.title!==current.title){S.detail.session.title=current.title;renderTop();}
  ensureProvider();
  S.skillIds=S.skillIds.filter(id=>enabledSkills().some(s=>String(s.id)===id));
  return d;
@@ -481,9 +489,10 @@ async function selectSession(id){
 function newChat(){S.epoch++;S.view='chat';S.sid=null;S.detail=null;S.live='';remember(null);closePop();closeSide();renderAll();$('input')?.focus();}
 let lastFull=0;const accessVersions={},accessValues={};
 async function loadDetail(timeout){
- const sid=S.sid,epoch=S.epoch;if(!sid)return;const accessVersion=accessVersions[sid]||0;
+ const sid=S.sid,epoch=S.epoch;if(!sid)return;const accessVersion=accessVersions[sid]||0,revision=titleRevision;
  const d=await api(`/api/sessions/${enc(sid)}`,{timeout});
  if(sid!==S.sid||epoch!==S.epoch)return;
+ if(d.session&&manualTitles[sid]?.revision>revision)d.session.title=manualTitles[sid].title;
  if((accessVersions[sid]||0)!==accessVersion&&d.session)d.session.access_mode=accessValues[sid];
  else if(d.session)accessValues[sid]=d.session.access_mode||'inherit';
  const before=latestRun();lastFull=Date.now();
@@ -532,7 +541,7 @@ async function send(){
  const epoch=S.epoch,key=draftKey(),model=selected?S.model:(p.model||''),mode=S.mode,accessMode=sessionAccess(),accessRevision=S.newAccessRevision,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode(),imageConfig=S.imageModes[draftKey()]?{...S.imageModes[draftKey()]}:null;S.sending=true;renderTools();
  let sid=S.sid;
  try{
-  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode,access_mode:accessMode}});sid=s.id;accessValues[sid]=s.access_mode||accessMode;accessVersions[sid]=(accessVersions[sid]||0)+1;if(S.data?.sessions&&!S.data.sessions.some(x=>x.id===sid))S.data.sessions.unshift({...s,access_mode:accessValues[sid]});if(S.newAccessRevision===accessRevision){S.newAccess='inherit';if(S.view==='chat'&&!S.sid)renderTools();}if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}if(S.imageModes[key]){S.imageModes[sid]=S.imageModes[key];delete S.imageModes[key];}S.sid=sid;remember(sid);}}
+  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),auto_title:true,provider_id:p.id,model,mode,access_mode:accessMode}});sid=s.id;accessValues[sid]=s.access_mode||accessMode;accessVersions[sid]=(accessVersions[sid]||0)+1;if(S.data?.sessions&&!S.data.sessions.some(x=>x.id===sid))S.data.sessions.unshift({...s,access_mode:accessValues[sid]});if(S.newAccessRevision===accessRevision){S.newAccess='inherit';if(S.view==='chat'&&!S.sid)renderTools();}if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}if(S.imageModes[key]){S.imageModes[sid]=S.imageModes[key];delete S.imageModes[key];}S.sid=sid;remember(sid);}}
   await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,...(images.length?{images}:{}),...(imageConfig?{create_image:true,image_provider_id:imageConfig.providerId,image_model:imageConfig.model}:{}),provider_id:p.id,model,mode,skill_ids:skillIds}});
   if(imageConfig&&S.epoch===epoch&&S.sid===sid&&$('input')?.value===rawText&&((!files.length&&!attachments().length)||attachments()===files))delete S.imageModes[sid];
   if(S.drafts[key]===rawText)delete S.drafts[key];
@@ -663,7 +672,7 @@ function deleteChat(id=S.sid){
  confirmDialog(`“${title}” 대화를 삭제할까요?`,'대화, 실행 기록과 대기 메시지가 삭제돼요. 만든 파일은 그대로 남아요.','삭제',async()=>{
   await api(`/api/sessions/${enc(id)}`,{method:'DELETE'});
   deletedSessionIds.add(String(id));
-  delete S.drafts[id];delete S.files[id];delete S.imageModes[id];delete accessValues[id];delete accessVersions[id];
+  delete S.drafts[id];delete S.files[id];delete S.imageModes[id];delete accessValues[id];delete accessVersions[id];delete manualTitles[id];
   if(S.data?.sessions)S.data.sessions=S.data.sessions.filter(s=>String(s.id)!==String(id));
   if(S.data?.active)delete S.data.active[id];
   if(S.sid===id){if(S.view==='chat')newChat();else{S.epoch++;S.sid=null;S.detail=null;S.live='';remember(null);renderSide();renderTop();}}
@@ -673,10 +682,10 @@ function deleteChat(id=S.sid){
  });
 }
 function startRename(){
- const btn=$('top-title');if(!btn||!S.detail)return;const old=S.detail.session.title;
+ const btn=$('top-title');if(!btn||!S.detail||(renaming&&renaming.sid===S.sid&&renaming.epoch===S.epoch))return;const sid=S.sid,epoch=S.epoch,old=S.detail.session.title;const edit={sid,epoch};renaming=edit;
  const wrap=document.createElement('div');wrap.className='top-title';wrap.innerHTML=`<input id="rename-input" value="${esc(old)}" maxlength="120" aria-label="대화 이름">`;btn.replaceWith(wrap);
  const input=$('rename-input');input.focus();input.select();let done=false;
- const finish=async save=>{if(done)return;done=true;const title=input.value.trim();if(save&&title&&title!==old){try{await api(`/api/sessions/${enc(S.sid)}`,{method:'PATCH',body:{title}});S.detail.session.title=title;await refreshState();renderSide();}catch(err){toast(err.message,true);}}renderTop();};
+ const finish=async save=>{if(done)return;done=true;const title=input.value.trim();if(save&&title&&title!==old){try{await api(`/api/sessions/${enc(sid)}`,{method:'PATCH',body:{title}});manualTitles[sid]={title,revision:++titleRevision};const item=S.data?.sessions?.find(s=>s.id===sid);if(item)item.title=title;if(S.sid===sid&&S.epoch===epoch&&S.detail)S.detail.session.title=title;renderSide();await refreshState();renderSide();}catch(err){toast(err.message,true);}}if(renaming===edit)renaming=null;if(S.sid===sid&&S.epoch===epoch)renderTop();};
  input.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.isComposing){ev.preventDefault();finish(true);}if(ev.key==='Escape'){ev.preventDefault();finish(false);}});
  input.addEventListener('blur',()=>finish(true));
 }
@@ -1119,7 +1128,7 @@ async function tick(){
    if(!live.run_id||live.status!==run.status||(live.rev!==S.detail.rev&&Date.now()-lastFull>450))await loadDetail(10000);
    else if(live.run_id===run.id&&live.text!==S.live){S.live=live.text;paintLive();}
   }
-  if(Object.keys(S.data.active||{}).length&&Date.now()-lastState>2200){lastState=Date.now();const before=JSON.stringify(S.data.active);await refreshState(10000);if(JSON.stringify(S.data.active)!==before)renderSide();}
+  if((Object.keys(S.data.active||{}).length||Object.keys(S.data.title_pending||{}).length)&&Date.now()-lastState>2200){lastState=Date.now();const before=JSON.stringify([S.data.active,S.data.sessions]);await refreshState(10000);if(JSON.stringify([S.data.active,S.data.sessions])!==before)renderSide();}
  }catch{}finally{ticking=false;}
 }
 
@@ -1139,7 +1148,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,deleteChat,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,renderTop,startRename,deleteChat,S};return;}
 setInterval(tick,280);
 boot();
 })();
