@@ -1,0 +1,52 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const nodes=new Map();
+function node(){return {value:'',innerHTML:'',textContent:'',style:{},disabled:false,classList:{add(){},remove(){},toggle(){}},addEventListener(){},setAttribute(){},querySelector(){return null}};}
+const c={console,URL,JSON,Date,Intl,Number,String,Map,Set,Math,TextDecoder,Error,Promise,Array,Object,RegExp,Uint16Array,Blob:class{},__NARU_TEST__:true,innerWidth:1200,innerHeight:900,
+ document:{getElementById(id){if(!nodes.has(id))nodes.set(id,node());return nodes.get(id)},addEventListener(){},documentElement:{dataset:{},classList:{add(){},toggle(){}}},querySelector(){return null},querySelectorAll(){return []}},
+ window:{addEventListener(){}},addEventListener(){},matchMedia:()=>({matches:false,addEventListener(){}}),localStorage:{getItem:()=>null,setItem(){},removeItem(){}},setTimeout,clearTimeout,setInterval(){},clearInterval(){},navigator:{},getComputedStyle:()=>({})};
+c.globalThis=c;Object.assign(c.window,c);
+const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r});return {promise,resolve}}, response=x=>({ok:true,json:async()=>x});
+let getWait,createWait,messageWait,modelWait;const requests=[];
+c.fetch=async(url,opts={})=>{const body=opts.body?JSON.parse(opts.body):null;requests.push({url,body,method:opts.method});
+ if(url==='/api/sessions/s1'&&opts.method==='PATCH')return body.provider_id?modelWait.promise:response({id:'s1',reasoning_effort:body.reasoning_effort});
+ if(url==='/api/sessions/s1'&&opts.method==='GET')return getWait.promise;
+ if(url==='/api/sessions')return createWait.promise;
+ if(url.endsWith('/messages')||url.endsWith('/queue'))return messageWait.promise;
+ if(url==='/api/state')return response(c.NaruUI.S.data);
+ throw Error('unexpected '+url);
+};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8'),c);
+const {S,sessionReasoning,saveReasoning,send,loadDetail,setModel}=c.NaruUI;
+S.data={providers:[{id:'p',kind:'codex',name:'ChatGPT'}],skills:[],sessions:[{id:'s1',reasoning_effort:'default'},{id:'s2',reasoning_effort:'low'}],settings:{},active:{},csrf_token:'test'};
+S.accounts={codex:{available:true,authenticated:true}};S.providerId='p';S.model='test';S.mode='chat';S.view='models';
+(async()=>{
+ S.sid='s1';S.detail={session:{id:'s1',reasoning_effort:'default'},runs:[]};getWait=deferred();
+ const old=loadDetail();await saveReasoning('high','s1',S.epoch,'p','test');
+ getWait.resolve(response({session:{id:'s1',reasoning_effort:'default'},runs:[],messages:[]}));await old;
+ assert.equal(sessionReasoning(),'high','stale detail does not undo saved selection');
+ S.sid='s2';S.detail={session:{id:'s2',reasoning_effort:'low'},runs:[]};assert.equal(sessionReasoning(),'low','each session keeps its own selection');
+ await assert.rejects(()=>saveReasoning('ultra','s1',S.epoch,'p','test'),/바뀌었어요/);
+ S.sid=null;S.detail=null;S.epoch++;await saveReasoning('xhigh',null,S.epoch,'p','test');
+ const input=c.document.getElementById('input');input.value='질문';S.drafts.new='질문';createWait=deferred();messageWait=deferred();
+ const pending=send();assert.equal(requests.at(-1).body.reasoning_effort,'xhigh');
+ S.epoch++;S.sid='s2';createWait.resolve(response({id:'created',reasoning_effort:'xhigh'}));
+ while(!requests.some(r=>r.url==='/api/sessions/created/messages'))await new Promise(r=>setImmediate(r));
+ assert.equal(requests.find(r=>r.url==='/api/sessions/created/messages').body.reasoning_effort,'xhigh','new run uses captured effort');
+ messageWait.resolve(response({run_id:'r'}));await pending;assert.equal(S.newReasoning,'default');
+ S.sid='s2';S.detail={session:{id:'s2',reasoning_effort:'low'},runs:[{status:'running'}],queue:[]};input.value='다음';S.drafts.s2='다음';messageWait=deferred();
+ const queued=send();assert.equal(requests.at(-1).url,'/api/sessions/s2/queue');assert.equal(requests.at(-1).body.reasoning_effort,'low','queue captures selected effort');
+ S.epoch++;S.sid='s1';messageWait.resolve(response({}));await queued;
+ S.sid=null;S.detail=null;S.epoch++;S.newReasoning='high';S.imageModes.new={providerId:'p',model:'__default__'};input.value='이미지';S.drafts.new='이미지';createWait=deferred();messageWait=deferred();
+ const image=send();assert.equal(requests.at(-1).body.reasoning_effort,'default','image generation does not use reasoning');S.epoch++;createWait.resolve(response({id:'image'}));
+ while(!requests.some(r=>r.url==='/api/sessions/image/messages'))await new Promise(r=>setImmediate(r));
+ assert.equal(requests.find(r=>r.url==='/api/sessions/image/messages').body.reasoning_effort,'default');messageWait.resolve(response({}));await image;
+ S.sid='s1';S.epoch++;S.view='models';S.providerId='p';S.model='test';S.detail={session:{id:'s1',provider_id:'p',model:'test',reasoning_effort:'high'},runs:[]};
+ modelWait=deferred();getWait=deferred();const changing=setModel('p','new-model');assert.equal(S.modelSaving,true);assert.equal(sessionReasoning(),'default');
+ await assert.rejects(()=>saveReasoning('low','s1',S.epoch,'p','new-model'),/바뀌었어요/);
+ input.value='blocked';const count=requests.length;await send();assert.equal(requests.length,count,'send waits for model save');
+ const stale=loadDetail();modelWait.resolve(response({id:'s1'}));await changing;
+ getWait.resolve(response({session:{id:'s1',provider_id:'p',model:'test',reasoning_effort:'high'},runs:[],messages:[]}));await stale;
+ assert.equal(S.model,'new-model','stale detail cannot undo a saved model');assert.equal(sessionReasoning(),'default','model change resets the previous reasoning');
+ console.log('Reasoning session, snapshots, queue, image, model change and stale responses passed.');
+})().catch(e=>{console.error(e);process.exitCode=1});

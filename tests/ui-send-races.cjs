@@ -25,7 +25,7 @@ const input=c.document.getElementById('input');input.value='first request';S.dra
  S.epoch++;S.sid='other';S.providerId='p2';S.model='different';S.mode='chat';S.skillIds=['s2'];S.drafts.new='new unsent draft';
  session.resolve(response({id:'created'}));
  while(requests.length<2)await new Promise(r=>setImmediate(r));
- assert.deepEqual(requests[1].body,{content:'first request',provider_id:'p1',model:'original',mode:'agent',skill_ids:['s1']});
+ assert.deepEqual(requests[1].body,{content:'first request',provider_id:'p1',model:'original',mode:'agent',reasoning_effort:'default',skill_ids:['s1']});
  message.resolve(response({run_id:'run'}));await pending;
  assert.equal(S.drafts.new,'new unsent draft','later draft is retained');
  // Typing or attaching another file while a send is pending must not be erased.

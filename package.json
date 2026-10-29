@@ -1,14 +1,14 @@
 {
   "name": "naru-harness",
   "productName": "Naru",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "description": "A personal desktop AI workspace with local and cloud model connections",
   "private": true,
   "main": "desktop/main.cjs",
   "scripts": {
     "start": "electron .",
     "web": "python3 server/app.py --port 4317",
-    "test": "python3 -m unittest discover -s tests -v && node --test desktop/security.test.cjs desktop/updater.test.cjs && node tests/ui-interactions.cjs && node tests/model-discovery.cjs && node tests/ui-model-search.cjs && node tests/ui-workflows.cjs && node tests/ui-images.cjs && node tests/ui-imagegen.cjs && node tests/ui-updates.cjs && node tests/ui-agent-status.cjs && node tests/ui-auto-title.cjs && node tests/ui-selection-reply.cjs && node tests/ui-send-races.cjs && node tests/ui-queue.cjs && node tests/ui-poll-recovery.cjs && node tests/ui-access-settings.cjs && node tests/ui-session-access.cjs && node tests/ui-delete-chat.cjs && node tests/ui-skill-import.cjs && node tests/ui-skill-folder.cjs && node --test tests/hero-lifecycle.cjs",
+    "test": "python3 -m unittest discover -s tests -v && node --test desktop/security.test.cjs desktop/updater.test.cjs && node tests/ui-interactions.cjs && node tests/model-discovery.cjs && node tests/ui-model-search.cjs && node tests/ui-workflows.cjs && node tests/ui-images.cjs && node tests/ui-imagegen.cjs && node tests/ui-updates.cjs && node tests/ui-agent-status.cjs && node tests/ui-auto-title.cjs && node tests/ui-selection-reply.cjs && node tests/ui-reasoning.cjs && node tests/ui-send-races.cjs && node tests/ui-queue.cjs && node tests/ui-poll-recovery.cjs && node tests/ui-access-settings.cjs && node tests/ui-session-access.cjs && node tests/ui-delete-chat.cjs && node tests/ui-skill-import.cjs && node tests/ui-skill-folder.cjs && node --test tests/hero-lifecycle.cjs",
     "package": "node scripts/package.cjs",
     "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --test desktop/security.test.cjs"
   },

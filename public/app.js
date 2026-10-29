@@ -16,6 +16,7 @@ const imageHTML=(images,cls='message-images')=>{const valid=(images||[]).filter(
 const TEXT_EXT=/\.(txt|md|markdown|csv|tsv|json|jsonl|py|js|mjs|cjs|ts|tsx|jsx|html?|css|scss|ya?ml|xml|log|sh|zsh|sql|toml|ini|cfg|env\.example|swift|kt|go|rs|java|c|h|cc|cpp|hpp|rb|php|lua|r|tex)$/i;
 
 const I={
+ bolt:'<path d="M13.5 2.5 5 13h6l-.5 8.5L19 11h-6z"/>',
  compose:'<path d="M12 20h8"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
  search:'<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
  sidebar:'<rect x="3" y="4.5" width="18" height="15" rx="3.5"/><path d="M9.5 4.5v15"/>',
@@ -112,7 +113,7 @@ function startHero(box){
  box.classList.add('live');size();h.recolor();h.kick();
 }
 const pref={get(k,d){try{const native=window.naruDesktop?.getPreference?.(k);if(native!=null)return native;const v=localStorage.getItem('naru.'+k);if(v!==null)window.naruDesktop?.setPreference?.(k,v);return v===null?d:v;}catch{return d;}},set(k,v){try{v=v==null?null:String(v);if(window.naruDesktop?.setPreference?.(k,v)===false)toast('화면 설정을 저장하지 못했어요. 앱 데이터 폴더 권한을 확인하세요.',true);v===null?localStorage.removeItem('naru.'+k):localStorage.setItem('naru.'+k,v);}catch{}}};
-const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',newAccess:'inherit',newAccessRevision:0,accessSaving:false,skillIds:[],drafts:{},files:{},imageModes:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
+const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',newAccess:'inherit',newAccessRevision:0,accessSaving:false,newReasoning:'default',newReasoningRevision:0,reasoningSaving:false,modelSaving:false,skillIds:[],drafts:{},files:{},imageModes:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
 
 // ---------- utilities ----------
 let toastTimer;
@@ -243,11 +244,15 @@ function renderChat(){
 function autosize(){const el=$('input');if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,240)+'px';}
 const queuePending=()=>S.detail?.queue||[];
 const enqueueMode=()=>runActive()||queuePending().length>0;
+const REASONING_LABELS={default:'기본',none:'꺼짐',minimal:'최소',low:'낮음',medium:'보통',high:'높음',xhigh:'매우 높음',max:'Max',ultra:'Ultra'};
+const reasoningValues={},reasoningVersions={},modelValues={},modelVersions={};
+const reasoningEligible=p=>!!p&&(p.kind==='codex'||(p.kind==='openai'&&String(p.base_url||'').replace(/\/+$/,'')==='https://openrouter.ai/api/v1'));
+function sessionReasoning(){return S.sid?(S.detail?.session?.reasoning_effort||reasoningValues[S.sid]||S.data?.sessions?.find(s=>s.id===S.sid)?.reasoning_effort||'default'):(S.newReasoning||'default');}
 const ACCESS_LABELS={manual:'매번 승인',auto_approve:'자동 승인',full_access:'전체 접근'};
 function sessionAccess(){return S.sid?(S.detail?.session?.access_mode||accessValues[S.sid]||S.data?.sessions?.find(s=>s.id===S.sid)?.access_mode||'inherit'):(S.newAccess||'inherit');}
 function accessLabel(){const mode=sessionAccess(),effective=mode==='inherit'?(S.data?.settings?.access_mode||'manual'):mode;return `${mode==='inherit'?'기본 · ':''}${ACCESS_LABELS[effective]||ACCESS_LABELS.manual}`;}
 const fileReads={};
-const canSend=()=>!S.sending&&!S.accessSaving&&!fileReads[draftKey()]&&!!(($('input')?.value||'').trim()||attachments().length);
+const canSend=()=>!S.sending&&!S.accessSaving&&!S.reasoningSaving&&!S.modelSaving&&!fileReads[draftKey()]&&!!(($('input')?.value||'').trim()||attachments().length);
 function syncSend(){const b=$('send');if(b)b.disabled=!canSend();}
 function wireComposer(){
  const input=$('input'),form=$('composer');
@@ -264,12 +269,13 @@ function renderTools(){
  const el=$('tools');if(!el)return;const active=runActive(),sk=selectedSkills();
  el.innerHTML=`${iconBtn('clip','파일 첨부','attach')}
  <button type="button" class="chip ${S.imageModes[draftKey()]?'on':''}" data-act="image-mode" aria-pressed="${!!S.imageModes[draftKey()]}" title="이미지 만들기"${S.sending?' disabled':''}>${icon('image')}<span>${S.imageModes[draftKey()]?'이미지 · '+esc(S.imageModes[draftKey()].model==='__default__'?'ChatGPT':S.imageModes[draftKey()].model):'이미지 만들기'}</span></button>
- <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="dialog" title="모델 바꾸기"${active?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
+ <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="dialog" title="모델 바꾸기"${active||S.modelSaving||S.reasoningSaving?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
+ <button type="button" class="chip reasoning-chip ${sessionReasoning()!=='default'?'on':''}" id="reasoning-chip" data-act="reasoning-menu" aria-haspopup="dialog" aria-label="추론 강도: ${esc(REASONING_LABELS[sessionReasoning()]||'기본')}" title="추론 강도"${(!reasoningEligible(provider())||S.imageModes[draftKey()]||S.sending||S.reasoningSaving||S.modelSaving||(S.sid&&!S.detail))?' disabled':''}>${icon('bolt')}<span>${esc(REASONING_LABELS[sessionReasoning()]||'기본')}</span>${icon('caret','caret')}</button>
  <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button></div>
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+'개'}</span>`:''}</button>
  <button type="button" class="chip access-chip" data-act="session-access" aria-haspopup="dialog" aria-label="이 대화의 도구 승인: ${esc(accessLabel())}" title="이 대화의 도구 승인"${S.sending||S.accessSaving||(S.sid&&!S.detail)?' disabled':''}><span>${esc(accessLabel())}</span>${icon('caret','caret')}</button>
  <span class="grow"></span>
- ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:''}<button type="submit" class="send" id="send" title="${enqueueMode()?'대기열에 추가':'보내기'}" aria-label="${enqueueMode()?'대기열에 추가':'보내기'}"${canSend()?'':' disabled'}>${icon('up')}</button>`;
+ ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:''}<button type="submit" class="send" id="send" title="${enqueueMode()?'대기열에 추가':'보내기'}" aria-label="${enqueueMode()?'대기열에 추가':'보내기'}"${canSend()?'':' disabled'}>${icon('up')}</button>`; if(pop&&pop.anchor?.id==='reasoning-chip'){pop.anchor=$('reasoning-chip');placePop();}
 }
 function queueHTML(items,paused,active,error){
  if(!items.length)return '';
@@ -514,15 +520,18 @@ async function selectSession(id){
 function newChat(){S.epoch++;S.view='chat';S.sid=null;S.detail=null;S.live='';remember(null);closePop();closeSide();renderAll();$('input')?.focus();}
 let lastFull=0;const accessVersions={},accessValues={};
 async function loadDetail(timeout){
- const sid=S.sid,epoch=S.epoch;if(!sid)return;const accessVersion=accessVersions[sid]||0,revision=titleRevision;
+ const sid=S.sid,epoch=S.epoch;if(!sid)return;const accessVersion=accessVersions[sid]||0,reasoningVersion=reasoningVersions[sid]||0,modelVersion=modelVersions[sid]||0,revision=titleRevision;
  const d=await api(`/api/sessions/${enc(sid)}`,{timeout});
  if(sid!==S.sid||epoch!==S.epoch)return;
  if(d.session&&manualTitles[sid]?.revision>revision)d.session.title=manualTitles[sid].title;
  if((accessVersions[sid]||0)!==accessVersion&&d.session)d.session.access_mode=accessValues[sid];
  else if(d.session)accessValues[sid]=d.session.access_mode||'inherit';
+ if(((reasoningVersions[sid]||0)!==reasoningVersion||S.modelSaving)&&d.session&&reasoningValues[sid])d.session.reasoning_effort=reasoningValues[sid];
+ else if(d.session)reasoningValues[sid]=d.session.reasoning_effort||'default';
+ if(d.session&&modelValues[sid]&&((modelVersions[sid]||0)!==modelVersion||S.modelSaving))Object.assign(d.session,modelValues[sid]);
  const before=latestRun();lastFull=Date.now();
  S.detail=d;S.live=d.live?.text||'';
- if(providerById(d.session.provider_id)&&!S.sending){S.providerId=d.session.provider_id;S.model=d.session.model||'';S.mode=d.session.mode||S.mode;}
+ if(providerById(d.session.provider_id)&&!S.sending&&!S.modelSaving){S.providerId=d.session.provider_id;S.model=d.session.model||'';S.mode=d.session.mode||S.mode;}
  if(S.view!=='chat')return;
  renderThread();renderTools();renderQueue();renderTop();renderDrawer();$('drawer')?.classList.toggle('open',S.drawer);
  const after=latestRun();
@@ -550,7 +559,7 @@ async function enableNotifications(){
 }
 async function send(){
  const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
- if((!text&&!files.length)||S.sending||S.accessSaving||fileReads[draftKey()])return;
+ if((!text&&!files.length)||S.sending||S.accessSaving||S.reasoningSaving||S.modelSaving||fileReads[draftKey()])return;
  if(S.imageModes[draftKey()]&&!text){toast('만들 이미지의 설명을 입력해 주세요.',true);return;}
  if(S.imageModes[draftKey()]&&files.some(f=>f.mime)){toast('첨부한 이미지 편집은 아직 지원하지 않아요. 이미지를 빼고 생성해 주세요.',true);return;}
  const creatingImage=!!S.imageModes[draftKey()],selected=provider(),p=selected||(creatingImage?providerById(S.imageModes[draftKey()].providerId):null);
@@ -563,11 +572,11 @@ async function send(){
  let content=text;const textFiles=files.filter(f=>!f.mime),images=files.filter(f=>f.mime).map(({name,mime,data})=>({name,mime,data}));
  if(textFiles.length)content=(text||'첨부한 파일을 검토해 줘.')+ATTACH_HEAD+textFiles.map(f=>`\n--- 첨부: ${f.name} ---\n${f.text}\n--- 첨부 끝 ---`).join('\n');
  if(content.length>100000){toast('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.',true);return;}
- const epoch=S.epoch,key=draftKey(),model=selected?S.model:(p.model||''),mode=S.mode,accessMode=sessionAccess(),accessRevision=S.newAccessRevision,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode(),imageConfig=S.imageModes[draftKey()]?{...S.imageModes[draftKey()]}:null;S.sending=true;renderTools();
+ const epoch=S.epoch,key=draftKey(),model=selected?S.model:(p.model||''),mode=S.mode,accessMode=sessionAccess(),accessRevision=S.newAccessRevision,reasoningEffort=creatingImage?'default':sessionReasoning(),reasoningRevision=S.newReasoningRevision,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode(),imageConfig=S.imageModes[draftKey()]?{...S.imageModes[draftKey()]}:null;S.sending=true;renderTools();
  let sid=S.sid;
  try{
-  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),auto_title:true,provider_id:p.id,model,mode,access_mode:accessMode}});sid=s.id;accessValues[sid]=s.access_mode||accessMode;accessVersions[sid]=(accessVersions[sid]||0)+1;if(S.data?.sessions&&!S.data.sessions.some(x=>x.id===sid))S.data.sessions.unshift({...s,access_mode:accessValues[sid]});if(S.newAccessRevision===accessRevision){S.newAccess='inherit';if(S.view==='chat'&&!S.sid)renderTools();}if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}if(S.imageModes[key]){S.imageModes[sid]=S.imageModes[key];delete S.imageModes[key];}S.sid=sid;remember(sid);}}
-  await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,...(images.length?{images}:{}),...(imageConfig?{create_image:true,image_provider_id:imageConfig.providerId,image_model:imageConfig.model}:{}),provider_id:p.id,model,mode,skill_ids:skillIds}});
+  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),auto_title:true,provider_id:p.id,model,mode,access_mode:accessMode,reasoning_effort:reasoningEffort}});sid=s.id;accessValues[sid]=s.access_mode||accessMode;accessVersions[sid]=(accessVersions[sid]||0)+1;reasoningValues[sid]=s.reasoning_effort||reasoningEffort;reasoningVersions[sid]=(reasoningVersions[sid]||0)+1;if(S.newReasoningRevision===reasoningRevision)S.newReasoning='default';if(S.data?.sessions&&!S.data.sessions.some(x=>x.id===sid))S.data.sessions.unshift({...s,access_mode:accessValues[sid]});if(S.newAccessRevision===accessRevision){S.newAccess='inherit';if(S.view==='chat'&&!S.sid)renderTools();}if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}if(S.imageModes[key]){S.imageModes[sid]=S.imageModes[key];delete S.imageModes[key];}S.sid=sid;remember(sid);}}
+  await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,...(images.length?{images}:{}),...(imageConfig?{create_image:true,image_provider_id:imageConfig.providerId,image_model:imageConfig.model}:{}),provider_id:p.id,model,mode,reasoning_effort:reasoningEffort,skill_ids:skillIds}});
   if(imageConfig&&S.epoch===epoch&&S.sid===sid&&$('input')?.value===rawText&&((!files.length&&!attachments().length)||attachments()===files))delete S.imageModes[sid];
   if(S.drafts[key]===rawText)delete S.drafts[key];
   if(S.files[key]===files)delete S.files[key];
@@ -594,6 +603,35 @@ function placePop(){
  if(!pop)return;const {el,anchor}=pop;const r=anchor.getBoundingClientRect(),w=el.offsetWidth,h=el.offsetHeight;
  let left=Math.min(Math.max(12,r.left),innerWidth-w-12);let top=r.top-h-8;if(top<12)top=Math.min(r.bottom+8,innerHeight-h-12);
  el.style.left=left+'px';el.style.top=top+'px';
+}
+async function saveReasoning(value,sid,epoch,pid,model){
+ if(!Object.hasOwn(REASONING_LABELS,value))throw new Error('올바른 추론 강도를 선택하세요.');
+ if(S.reasoningSaving||S.modelSaving||S.epoch!==epoch||S.sid!==sid||S.providerId!==pid||S.model!==model)throw new Error('대화나 모델이 바뀌었어요. 다시 선택해 주세요.');
+ if(!sid){S.newReasoning=value;S.newReasoningRevision++;renderTools();return;}
+ S.reasoningSaving=true;renderTools();
+ try{
+  const updated=await api(`/api/sessions/${enc(sid)}`,{method:'PATCH',body:{reasoning_effort:value}});
+  const saved=updated.reasoning_effort||value;reasoningValues[sid]=saved;reasoningVersions[sid]=(reasoningVersions[sid]||0)+1;
+  const item=S.data?.sessions?.find(s=>s.id===sid);if(item)item.reasoning_effort=saved;
+  if(S.sid===sid&&S.epoch===epoch&&S.detail?.session)S.detail.session.reasoning_effort=saved;
+ }finally{S.reasoningSaving=false;if(S.view==='chat')renderTools();}
+}
+async function openReasoningMenu(){
+ const anchor=$('reasoning-chip'),p=provider(),sid=S.sid,epoch=S.epoch,pid=S.providerId,model=S.model;
+ if(!anchor||!reasoningEligible(p))return;
+ const el=openPop(anchor,'<div class="reasoning-pop"><div class="reasoning-status" role="status">불러오는 중…</div></div>',{width:256});
+ el.setAttribute('role','dialog');el.setAttribute('aria-label','추론 강도');
+ try{
+  const result=await api(`/api/providers/${enc(pid)}/reasoning?model=${enc(model||p.model||'')}`);
+  if(!pop||pop.el!==el||S.epoch!==epoch||S.sid!==sid||S.providerId!==pid||S.model!==model)return;
+  const levels=['default',...new Set((Array.isArray(result.levels)?result.levels:[]).filter(x=>x!=='default'&&Object.hasOwn(REASONING_LABELS,x)))];
+  if(levels.length===1){el.innerHTML='<div class="reasoning-pop"><div class="reasoning-status">이 모델은 추론 강도를 조절할 수 없어요.</div></div>';placePop();return;}
+  const current=levels.indexOf(sessionReasoning()),index=current<0?0:current;
+  el.innerHTML=`<div class="reasoning-pop"><div class="reasoning-head">${icon('bolt')}<div><strong data-reasoning-label>${esc(REASONING_LABELS[levels[index]])}</strong><span>${esc(modelLabel())}</span></div></div><label class="sr" for="reasoning-range">추론 강도</label><input id="reasoning-range" type="range" min="0" max="${levels.length-1}" step="1" value="${index}" aria-valuetext="${esc(REASONING_LABELS[levels[index]])}"><div class="reasoning-ends"><span>기본</span><span>${esc(REASONING_LABELS[levels.at(-1)])}</span></div></div>`;
+  const range=el.querySelector('#reasoning-range');range.addEventListener('input',()=>{const label=REASONING_LABELS[levels[+range.value]];el.querySelector('[data-reasoning-label]').textContent=label;range.setAttribute('aria-valuetext',label);});
+  range.addEventListener('change',async()=>{const value=levels[+range.value];closePop();try{await saveReasoning(value,sid,epoch,pid,model);}catch(err){toast(err.message,true);}});
+  placePop();range.focus();
+ }catch(err){if(pop?.el===el){el.innerHTML=`<div class="reasoning-pop"><div class="reasoning-status">${esc(err.message)}</div></div>`;placePop();}}
 }
 function modelOptions(p){
  const list=S.models[p.id]||[], options=p.kind==='codex'?['',...list]:[...list];
@@ -675,8 +713,18 @@ function modelMenu(){
  search.focus();discoverModels();
 }
 async function setModel(pid,model){
- S.providerId=pid;S.model=model;renderTools();
- if(S.sid){try{await api(`/api/sessions/${enc(S.sid)}`,{method:'PATCH',body:{provider_id:pid,model}});}catch(err){toast(err.message,true);}}
+ if(S.modelSaving||S.reasoningSaving)return;
+ const sid=S.sid,epoch=S.epoch,changed=S.providerId!==pid||S.model!==model;
+ if(!changed)return;
+ const previous={provider_id:S.providerId,model:S.model,reasoning_effort:sessionReasoning()};
+ S.providerId=pid;S.model=model;
+ const apply=(state)=>{if(sid){reasoningValues[sid]=state.reasoning_effort;reasoningVersions[sid]=(reasoningVersions[sid]||0)+1;modelValues[sid]={provider_id:state.provider_id,model:state.model};modelVersions[sid]=(modelVersions[sid]||0)+1;const item=S.data?.sessions?.find(s=>s.id===sid);if(item)Object.assign(item,state);if(S.sid===sid&&S.epoch===epoch&&S.detail?.session)Object.assign(S.detail.session,state);}else{S.newReasoning=state.reasoning_effort;S.newReasoningRevision++;}};
+ apply({provider_id:pid,model,reasoning_effort:'default'});
+ if(sid)S.modelSaving=true;
+ renderTools();
+ if(sid)try{await api(`/api/sessions/${enc(sid)}`,{method:'PATCH',body:{provider_id:pid,model,reasoning_effort:'default'}});}
+ catch(err){apply(previous);if(S.sid===sid&&S.epoch===epoch){S.providerId=previous.provider_id;S.model=previous.model;}toast(err.message,true);}
+ finally{if(modelValues[sid]){modelVersions[sid]=(modelVersions[sid]||0)+1;reasoningVersions[sid]=(reasoningVersions[sid]||0)+1;}S.modelSaving=false;if(S.view==='chat')renderTools();}
 }
 function skillsMenu(){
  const anchor=$('skill-chip');const list=enabledSkills();
@@ -697,7 +745,7 @@ function deleteChat(id=S.sid){
  confirmDialog(`“${title}” 대화를 삭제할까요?`,'대화, 실행 기록과 대기 메시지가 삭제돼요. 만든 파일은 그대로 남아요.','삭제',async()=>{
   await api(`/api/sessions/${enc(id)}`,{method:'DELETE'});
   deletedSessionIds.add(String(id));
-  delete S.drafts[id];delete S.files[id];delete S.imageModes[id];delete accessValues[id];delete accessVersions[id];delete manualTitles[id];
+  delete S.drafts[id];delete S.files[id];delete S.imageModes[id];delete accessValues[id];delete accessVersions[id];delete reasoningValues[id];delete reasoningVersions[id];delete modelValues[id];delete modelVersions[id];delete manualTitles[id];
   if(S.data?.sessions)S.data.sessions=S.data.sessions.filter(s=>String(s.id)!==String(id));
   if(S.data?.active)delete S.data.active[id];
   if(S.sid===id){if(S.view==='chat')newChat();else{S.epoch++;S.sid=null;S.detail=null;S.live='';remember(null);renderSide();renderTop();}}
@@ -1058,6 +1106,7 @@ const ACT={
  'image-connect':()=>{closeDialog();go('models');},
  'remove-file':el=>{const key=draftKey();S.files[key]=attachments().filter((_,i)=>i!==+el.dataset.id);renderChips();},
  'model-menu':()=>pop&&pop.anchor===$('model-chip')?closePop():modelMenu(),
+ 'reasoning-menu':()=>pop&&pop.anchor===$('reasoning-chip')?closePop():openReasoningMenu(),
  'skills-menu':()=>pop&&pop.anchor===$('skill-chip')?closePop():skillsMenu(),
  'session-access':()=>openSessionAccess(),
  'mode':async el=>{S.mode=el.dataset.mode;renderTools();if(S.sid)try{await api(`/api/sessions/${enc(S.sid)}`,{method:'PATCH',body:{mode:S.mode}});}catch(err){toast(err.message,true);}},
@@ -1066,7 +1115,7 @@ const ACT={
  'queue-resume':async el=>{const sid=S.sid;el.disabled=true;await api(`/api/sessions/${enc(sid)}/queue/resume`,{method:'POST',body:{}});if(S.sid===sid)await loadDetail();refreshState().then(()=>renderSide()).catch(()=>{});},
  'stop':async el=>{const r=latestRun();if(!r)return;el.disabled=true;await api(`/api/runs/${enc(r.id)}/cancel`,{method:'POST',body:{}});await loadDetail();},
  'resume':async el=>{el.disabled=true;await api(`/api/runs/${enc(el.dataset.id)}/resume`,{method:'POST',body:{}});S.data.active={...(S.data.active||{}),[S.sid]:'running'};await loadDetail();renderSide();},
- 'regenerate':async el=>{el.disabled=true;await api(`/api/sessions/${enc(S.sid)}/regenerate`,{method:'POST',body:{provider_id:S.providerId,model:S.model,mode:S.mode,skill_ids:selectedSkills().map(s=>s.id)}});S.data.active={...(S.data.active||{}),[S.sid]:'running'};await loadDetail();renderSide();},
+ 'regenerate':async el=>{el.disabled=true;await api(`/api/sessions/${enc(S.sid)}/regenerate`,{method:'POST',body:{provider_id:S.providerId,model:S.model,mode:S.mode,reasoning_effort:sessionReasoning(),skill_ids:selectedSkills().map(s=>s.id)}});S.data.active={...(S.data.active||{}),[S.sid]:'running'};await loadDetail();renderSide();},
  'toggle-run':el=>{const id=el.dataset.id,run=S.detail.runs.find(r=>r.id===id),broken=run&&['failed','cancelled','interrupted'].includes(run.status)&&run===latestRun();if(broken){S.open.has('x'+id)?S.open.delete('x'+id):S.open.add('x'+id);}else{S.open.has(id)?S.open.delete(id):S.open.add(id);}renderThread();},
  'toggle-step':el=>{const id=el.dataset.id;S.steps.has(id)?S.steps.delete(id):S.steps.add(id);renderThread();},
  'copy-code':el=>copyText(S.codes[+el.dataset.id]||''),
@@ -1177,7 +1226,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,renderTop,startRename,deleteChat,showSelectionReply,replyToSelection,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,renderTop,startRename,deleteChat,showSelectionReply,replyToSelection,sessionReasoning,saveReasoning,openReasoningMenu,setModel,S};return;}
 setInterval(tick,280);
 boot();
 })();

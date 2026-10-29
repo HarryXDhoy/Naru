@@ -409,6 +409,39 @@ def _check_event(obj, provider):
         raise ProviderError(_redact(err.get("message", err) if isinstance(err, dict) else err, provider))
 
 
+REASONING_LEVELS = ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra')
+OPENROUTER_REASONING_LEVELS = REASONING_LEVELS[:-1]
+
+def reasoning_supported(provider):
+    if provider.get('kind') == 'codex':return True
+    return provider.get('kind') == 'openai' and urllib.parse.urlsplit(_base(provider)).hostname == 'openrouter.ai'
+
+def validate_reasoning(provider, effort, image=False):
+    if not isinstance(effort, str) or effort not in ('default', *REASONING_LEVELS):
+        raise ProviderError('올바른 추론 강도를 선택해 주세요.')
+    if effort != 'default' and (image or not reasoning_supported(provider)):
+        raise ProviderError('이 연결에서는 추론 강도를 조절할 수 없어요. 기본값을 선택해 주세요.')
+    if effort == 'ultra' and provider.get('kind') != 'codex':
+        raise ProviderError('OpenRouter는 Ultra 추론 강도를 지원하지 않아요.')
+    return effort
+
+def reasoning_capabilities(provider, model):
+    if provider.get('kind') == 'codex':
+        catalog = codex_models(detailed=True)
+        match = next((x for x in catalog if x.get('model') == model or x.get('id') == model), None) if model else next((x for x in catalog if x.get('isDefault')), None)
+        items = (match or {}).get('supportedReasoningEfforts') or []
+        levels = [x.get('reasoningEffort') for x in items if isinstance(x, dict)]
+        return {'levels': [x for x in REASONING_LEVELS if x in levels], 'model': (match or {}).get('model', model), 'default': (match or {}).get('defaultReasoningEffort')}
+    if reasoning_supported(provider):
+        data = _json_request(provider, '/models')
+        match = next((x for x in data.get('data', []) if isinstance(x, dict) and x.get('id') == model), None)
+        reasoning = (match or {}).get('reasoning')
+        if not isinstance(reasoning, dict) or 'supported_efforts' not in reasoning:return {'levels': []}
+        items = reasoning['supported_efforts']
+        levels = OPENROUTER_REASONING_LEVELS if items is None else items if isinstance(items, list) else []
+        return {'levels': [x for x in OPENROUTER_REASONING_LEVELS if x in levels], 'model': model, 'default': reasoning.get('default_effort')}
+    return {'levels': []}
+
 def list_models(provider):
     kind = provider.get("kind", "openai")
     if kind == "codex":
@@ -454,6 +487,9 @@ def _openai(provider, messages, tools, on_delta, cancel, max_tokens):
         if source.get('images'):
             item['content'] = ([{'type': 'text', 'text': source['content']}] if source.get('content') else []) + [{'type': 'image_url', 'image_url': {'url': f"data:{im['mime']};base64,{im['data']}"}} for im in source['images']]
     payload = {"model": provider["model"], "messages": clean, "stream": True}
+    if provider.get('reasoning_effort') and provider['reasoning_effort'] != 'default':
+        payload['reasoning'] = {'effort': provider['reasoning_effort']}
+        payload['provider'] = {'require_parameters': True}
     # Chat-completions compatible runtimes generally implement max_tokens.
     payload["max_completion_tokens" if "api.openai.com" == urllib.parse.urlsplit(_base(provider)).hostname else "max_tokens"] = max_tokens
     if tools:
@@ -713,6 +749,7 @@ def _ollama(provider, messages, tools, on_delta, cancel, max_tokens):
 def complete(provider, messages, tools, on_delta, cancel, max_tokens=4096):
     if cancel.is_set():
         raise CancelledError("실행이 취소되었습니다.")
+    validate_reasoning(provider, provider.get('reasoning_effort','default'))
     kind = provider.get("kind", "openai")
     if kind == "codex":
         return _codex_complete(provider, messages, tools if provider.get("tools_enabled", True) else [], on_delta, cancel, max_tokens)
@@ -733,7 +770,7 @@ def _codex_executable():
     return next((str(p) for p in candidates if p and Path(p).is_file() and os.access(p, os.X_OK)), None)
 
 
-def codex_models():
+def codex_models(detailed=False):
     """Read the official app-server model catalog without handling credentials.
 
     This catalog can be cached or bundled and is not proof of account entitlement.
@@ -785,7 +822,7 @@ def codex_models():
             for item in response.get("data", []):
                 model = item.get("model") or item.get("id") if isinstance(item, dict) else None
                 if isinstance(model, str) and model and model not in seen and not item.get("hidden"):
-                    seen.add(model); result.append(model)
+                    seen.add(model); result.append(item if detailed else model)
             cursor = response.get("nextCursor")
             if not cursor:
                 break
@@ -842,7 +879,7 @@ def _kill_group(process):
             pass
 
 
-def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None, _planner=False, images=None, _image_generation=False):
+def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None, _planner=False, images=None, _image_generation=False, reasoning_effort='default'):
     if _image_generation and (mode != 'chat' or _planner):
         raise ProviderError('이미지 생성은 제한된 대화 경로에서만 실행할 수 있습니다.')
     binary = _codex_executable()
@@ -870,6 +907,9 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
         args += ["-c", 'web_search="disabled"', "-c", 'skills.bundled.enabled=false', "-c", 'skills.include_instructions=false', "-c", 'project_doc_max_bytes=0', "-c", 'mcp_servers={}']
     if model and str(model).strip():
         args += ["--model", str(model).strip()]
+    if reasoning_effort != 'default':
+        if reasoning_effort not in REASONING_LEVELS:raise ProviderError('올바른 추론 강도를 선택해 주세요.')
+        args += ['-c', 'model_reasoning_effort="'+reasoning_effort+'"']
     for image in images or []:
         args += ['--image', image]
     args.append("-")
@@ -1017,6 +1057,7 @@ def _codex_complete(provider, messages, tools, on_delta, cancel, max_tokens):
         with codex_image_files(messages) as images:
             kwargs={'_schema':path,'_planner':True}
             if images:kwargs['images']=images
+            if provider.get('reasoning_effort', 'default') != 'default':kwargs['reasoning_effort']=provider['reasoning_effort']
             result = run_codex(prompt, provider.get("model", ""), folder, "chat", lambda *_: None, cancel, **kwargs)
     try:
         value = json.loads(result["content"])
