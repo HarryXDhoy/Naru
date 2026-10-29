@@ -231,7 +231,7 @@ function renderTop(){
  if(s){const n=S.detail.artifacts?.length||0;html+=`<button type="button" class="icon-btn ${S.drawer?'on':''}" data-act="drawer" title="파일과 실행 정보 (⌘J)" aria-label="파일과 실행 정보" aria-pressed="${S.drawer}">${icon('files')}${n?`<span class="count">${n}</span>`:''}</button>${iconBtn('more','대화 메뉴','chat-menu')}`;}
  t.innerHTML=html;
 }
-function renderMain(){if(S.view!=='chat')stopHero();if(S.view==='chat')renderChat();else if(S.view==='models')renderModels();else if(S.view==='skills')renderSkills();else if(S.view==='workflows')renderWorkflows();else if(S.view==='memory')renderMemory();else renderSettings();}
+function renderMain(){hideSelectionReply();if(S.view!=='chat')stopHero();if(S.view==='chat')renderChat();else if(S.view==='models')renderModels();else if(S.view==='skills')renderSkills();else if(S.view==='workflows')renderWorkflows();else if(S.view==='memory')renderMemory();else renderSettings();}
 
 // ---------- chat ----------
 function renderChat(){
@@ -328,8 +328,33 @@ function setEmpty(on){
 }
 function messageHTML(m,isLast){
  S.msgs.set(String(m.id),m.content);
- if(m.role==='user'){const {text,files}=splitAttachments(m.content);return `<div class="u"><div class="bubble">${esc(text.trim())}${imageHTML(m.images)}${files.length?`<span class="att">${files.map(esc).join(', ')}</span>`:''}</div></div>`;}
- return `<article class="a ${isLast?'last':''}"><div class="md">${markdown(m.content)}</div><div class="acts">${iconBtn('copy','복사','copy-msg',m.id)}${isLast&&!m.create_image?iconBtn('retry','다시 답하기','regenerate',m.id):''}${iconBtn('memory','메모리로 저장','save-memory',m.id)}${iconBtn('skill','스킬로 저장','save-skill',m.id)}</div></article>`;
+ if(m.role==='user'){const {text,files}=splitAttachments(m.content);return `<div class="u"><div class="bubble"><span class="selectable-message">${esc(text.trim())}</span>${imageHTML(m.images)}${files.length?`<span class="att">${files.map(esc).join(', ')}</span>`:''}</div></div>`;}
+ return `<article class="a ${isLast?'last':''}"><div class="md selectable-message">${markdown(m.content)}</div><div class="acts">${iconBtn('copy','복사','copy-msg',m.id)}${isLast&&!m.create_image?iconBtn('retry','다시 답하기','regenerate',m.id):''}${iconBtn('memory','메모리로 저장','save-memory',m.id)}${iconBtn('skill','스킬로 저장','save-skill',m.id)}</div></article>`;
+}
+let selectionReply=null,selectionButton=null;
+function hideSelectionReply(){selectionReply=null;if(selectionButton)selectionButton.hidden=true;}
+function showSelectionReply(){
+ const selection=window.getSelection?.(),col=$('col');
+ if(S.view!=='chat'||!S.sid||!col||!selection||selection.isCollapsed||!selection.rangeCount){hideSelectionReply();return;}
+ const container=node=>(node?.nodeType===1?node:node?.parentElement)?.closest?.('.selectable-message');
+ const start=container(selection.anchorNode),end=container(selection.focusNode),text=String(selection).trim();
+ if(!text||!start||start!==end||!col.contains(start)){hideSelectionReply();return;}
+ const rect=selection.getRangeAt(0).getBoundingClientRect();
+ if(!selectionButton){
+  selectionButton=document.createElement('button');selectionButton.type='button';selectionButton.className='selection-reply';selectionButton.textContent='답장';selectionButton.setAttribute('aria-label','선택한 내용에 답장');
+  selectionButton.addEventListener('pointerdown',ev=>ev.preventDefault());selectionButton.addEventListener('click',replyToSelection);document.body.appendChild(selectionButton);
+ }
+ selectionReply={text,sid:S.sid,epoch:S.epoch};selectionButton.hidden=false;
+ const width=selectionButton.offsetWidth||64,height=selectionButton.offsetHeight||32;
+ selectionButton.style.left=Math.max(8,Math.min(innerWidth-width-8,rect.left+(rect.width-width)/2))+'px';
+ selectionButton.style.top=Math.max(8,Math.min(innerHeight-height-8,rect.top>=height+8?rect.top-height-6:rect.bottom+6))+'px';
+}
+function replyToSelection(){
+ const reply=selectionReply,input=$('input');hideSelectionReply();
+ if(!reply||S.view!=='chat'||reply.sid!==S.sid||reply.epoch!==S.epoch||!input)return;
+ const quote=reply.text.replace(/\r\n?/g,'\n').split('\n').map(line=>'> '+line).join('\n');
+ input.value=quote+'\n\n'+input.value;S.drafts[draftKey()]=input.value;autosize();syncSend();input.focus();input.setSelectionRange?.(input.value.length,input.value.length);
+ window.getSelection?.()?.removeAllRanges();
 }
 function buildSteps(events){
  const out=[],calls=new Map();
@@ -1014,6 +1039,10 @@ async function accountUse(key){
 }
 
 // ---------- events ----------
+document.addEventListener('pointerdown',ev=>{if(selectionButton&&!selectionButton.contains(ev.target))hideSelectionReply();});
+document.addEventListener('pointerup',ev=>{if(!selectionButton?.contains(ev.target))showSelectionReply();});
+document.addEventListener('keyup',ev=>{if(ev.shiftKey||ev.key==='Shift')showSelectionReply();});
+document.addEventListener('scroll',hideSelectionReply,true);
 const ACT={
  'new':()=>newChat(),
  'palette':()=>openPalette(),
@@ -1096,7 +1125,7 @@ document.addEventListener('click',async ev=>{
 document.addEventListener('keydown',ev=>{
  if(applyingUpdate){ev.preventDefault();return;}
  const mod=ev.metaKey||ev.ctrlKey,k=ev.key.toLowerCase();
- if(ev.key==='Escape'){if(palette){closePalette();return;}if(pop){const anchor=pop.anchor;closePop();anchor?.focus();return;}closeSide();}
+ if(ev.key==='Escape'){if(selectionReply){hideSelectionReply();return;}if(palette){closePalette();return;}if(pop){const anchor=pop.anchor;closePop();anchor?.focus();return;}closeSide();}
  if(!mod)return;
  if(k==='k'){ev.preventDefault();palette?closePalette():openPalette();}
  else if(k==='n'&&!$('dialog').open){ev.preventDefault();newChat();}
@@ -1148,7 +1177,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,renderTop,startRename,deleteChat,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,renderTop,startRename,deleteChat,showSelectionReply,replyToSelection,S};return;}
 setInterval(tick,280);
 boot();
 })();

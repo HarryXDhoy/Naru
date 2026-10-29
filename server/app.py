@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import providers
 import accounts
 
-VERSION='0.3.8'
+VERSION='0.3.9'
 TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings','queued_messages','workflows'}
 INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',),'queued_messages':('session_id',)}
 ACTIVE=('running','awaiting_approval')
@@ -1032,11 +1032,13 @@ class Runtime:
         finally:
             self.store.patch('sessions',run['session_id'],updated_at=now())
             with self.lock:
-                self.controls.pop(id,None);self.live.pop(id,None)
-                if self.active.get(run['session_id'])==id:self.active.pop(run['session_id'],None)
-                if self.store.where('queued_messages','session_id',run['session_id']):
-                    if self.store.field('runs',id,'status')=='completed':self.dispatch_queue(run['session_id'])
-                    else:self.store.patch('sessions',run['session_id'],queue_paused=True)
+                try:
+                    self.live.pop(id,None)
+                    if self.active.get(run['session_id'])==id:self.active.pop(run['session_id'],None)
+                    if self.store.where('queued_messages','session_id',run['session_id']):
+                        if self.store.field('runs',id,'status')=='completed':self.dispatch_queue(run['session_id'])
+                        else:self.store.patch('sessions',run['session_id'],queue_paused=True)
+                finally:self.controls.pop(id,None)
     def cancel(self,id):
         with self.lock:
             if id in self.controls:self.controls[id].set()
