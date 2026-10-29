@@ -112,7 +112,7 @@ function startHero(box){
  box.classList.add('live');size();h.recolor();h.kick();
 }
 const pref={get(k,d){try{const native=window.naruDesktop?.getPreference?.(k);if(native!=null)return native;const v=localStorage.getItem('naru.'+k);if(v!==null)window.naruDesktop?.setPreference?.(k,v);return v===null?d:v;}catch{return d;}},set(k,v){try{v=v==null?null:String(v);if(window.naruDesktop?.setPreference?.(k,v)===false)toast('화면 설정을 저장하지 못했어요. 앱 데이터 폴더 권한을 확인하세요.',true);v===null?localStorage.removeItem('naru.'+k):localStorage.setItem('naru.'+k,v);}catch{}}};
-const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',newAccess:'inherit',newAccessRevision:0,accessSaving:false,skillIds:[],drafts:{},files:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
+const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',newAccess:'inherit',newAccessRevision:0,accessSaving:false,skillIds:[],drafts:{},files:{},imageModes:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
 
 // ---------- utilities ----------
 let toastTimer;
@@ -260,6 +260,7 @@ function wireComposer(){
 function renderTools(){
  const el=$('tools');if(!el)return;const active=runActive(),sk=selectedSkills();
  el.innerHTML=`${iconBtn('clip','파일 첨부','attach')}
+ <button type="button" class="chip ${S.imageModes[draftKey()]?'on':''}" data-act="image-mode" aria-pressed="${!!S.imageModes[draftKey()]}" title="이미지 만들기"${S.sending?' disabled':''}>${icon('image')}<span>${S.imageModes[draftKey()]?'이미지 · '+esc(S.imageModes[draftKey()].model==='__default__'?'ChatGPT':S.imageModes[draftKey()].model):'이미지 만들기'}</span></button>
  <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="dialog" title="모델 바꾸기"${active?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
  <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button></div>
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+'개'}</span>`:''}</button>
@@ -269,7 +270,7 @@ function renderTools(){
 }
 function queueHTML(items,paused,active,error){
  if(!items.length)return '';
- return `<section class="message-queue" aria-label="대기 메시지"><div class="queue-head"><strong>대기 메시지 ${items.length}</strong>${paused?'<span>일시정지됨</span>':''}${paused&&!active?'<button type="button" class="btn" data-act="queue-resume">계속</button>':''}</div>${error?`<p class="queue-error" role="alert">${esc(error)}</p>`:''}<ol class="queue-list">${items.map((item,i)=>{const parts=splitAttachments(item.content);return `<li class="queue-item"><span class="queue-number">${i+1}</span><div class="queue-content"><div class="queue-text">${esc(parts.text)}</div>${parts.files.length?`<div class="queue-files">첨부: ${parts.files.map(esc).join(', ')}</div>`:''}${imageHTML(item.images,'queue-images')}</div><div class="queue-actions">${iconBtn('edit','대기 메시지 편집','queue-edit',item.id)}${iconBtn('x','대기 메시지 삭제','queue-remove',item.id)}</div></li>`;}).join('')}</ol></section>`;
+ return `<section class="message-queue" aria-label="대기 메시지"><div class="queue-head"><strong>대기 메시지 ${items.length}</strong>${paused?'<span>일시정지됨</span>':''}${paused&&!active?'<button type="button" class="btn" data-act="queue-resume">계속</button>':''}</div>${error?`<p class="queue-error" role="alert">${esc(error)}</p>`:''}<ol class="queue-list">${items.map((item,i)=>{const parts=splitAttachments(item.content);return `<li class="queue-item"><span class="queue-number">${i+1}</span><div class="queue-content">${item.create_image?'<div class="queue-files">이미지 만들기</div>':''}<div class="queue-text">${esc(parts.text)}</div>${parts.files.length?`<div class="queue-files">첨부: ${parts.files.map(esc).join(', ')}</div>`:''}${imageHTML(item.images,'queue-images')}</div><div class="queue-actions">${iconBtn('edit','대기 메시지 편집','queue-edit',item.id)}${iconBtn('x','대기 메시지 삭제','queue-remove',item.id)}</div></li>`;}).join('')}</ol></section>`;
 }
 function renderQueue(){const el=$('message-queue');if(!el)return;const items=queuePending();el.hidden=!items.length;el.innerHTML=queueHTML(items,!!S.detail?.queue_paused,runActive(),S.detail?.queue_error);}
 function renderChips(){
@@ -325,7 +326,7 @@ function setEmpty(on){
 function messageHTML(m,isLast){
  S.msgs.set(String(m.id),m.content);
  if(m.role==='user'){const {text,files}=splitAttachments(m.content);return `<div class="u"><div class="bubble">${esc(text.trim())}${imageHTML(m.images)}${files.length?`<span class="att">${files.map(esc).join(', ')}</span>`:''}</div></div>`;}
- return `<article class="a ${isLast?'last':''}"><div class="md">${markdown(m.content)}</div><div class="acts">${iconBtn('copy','복사','copy-msg',m.id)}${isLast?iconBtn('retry','다시 답하기','regenerate',m.id):''}${iconBtn('memory','메모리로 저장','save-memory',m.id)}${iconBtn('skill','스킬로 저장','save-skill',m.id)}</div></article>`;
+ return `<article class="a ${isLast?'last':''}"><div class="md">${markdown(m.content)}</div><div class="acts">${iconBtn('copy','복사','copy-msg',m.id)}${isLast&&!m.create_image?iconBtn('retry','다시 답하기','regenerate',m.id):''}${iconBtn('memory','메모리로 저장','save-memory',m.id)}${iconBtn('skill','스킬로 저장','save-skill',m.id)}</div></article>`;
 }
 function buildSteps(events){
  const out=[],calls=new Map();
@@ -414,9 +415,14 @@ function runHTML(run,isLatest){
   if(!text&&!pending.length)html+='<div class="waiting" id="waiting"><span class="thinking-dots" role="img" aria-label="작업 중"><i></i><i></i><i></i></span></div>';
  }else if(broken){
   const msg=run.status==='cancelled'?'중지했어요.':run.status==='interrupted'?'앱이 닫혀 작업이 멈췄어요.':(run.error||'작업을 마치지 못했어요.');
-  html+=`<div class="notice ${run.status==='failed'?'bad':''}"><p>${esc(msg)}</p>${isLatest?`<button type="button" class="btn sm" data-act="resume" data-id="${esc(run.id)}">${run.status==='failed'?'다시 시도':'이어서 실행'}</button>`:''}</div>`;
+  html+=`<div class="notice ${run.status==='failed'?'bad':''}"><p>${esc(msg)}</p>${run.create_image?'<p>이미지 요청이 전달됐다면 중지해도 사용량이나 요금이 발생할 수 있어요. 다시 요청하면 새 호출이 시작돼요.</p>':''}${isLatest?`<button type="button" class="btn sm" data-act="resume" data-id="${esc(run.id)}">${run.create_image?'다시 요청':run.status==='failed'?'다시 시도':'이어서 실행'}</button>`:''}</div>`;
  }
+ html+=generatedImagesHTML(run,d.artifacts||[]);
  return html+'</section>';
+}
+function generatedImagesHTML(run,artifacts){
+ const images=artifacts.filter(a=>a.image_generated&&String(a.run_id)===String(run.id));
+ return images.map(a=>{const url=`/api/artifacts/${enc(a.id)}/download`,name=esc(a.name||'생성된 이미지');return `<figure class="generated-image"><button type="button" data-artifact="${esc(a.id)}" aria-label="${name} 크게 보기"><img src="${url}?inline=1" alt="${name}" loading="lazy"></button><a href="${url}" download aria-label="${name} 내려받기">${icon('download')}<span>내려받기</span></a></figure>`;}).join('');
 }
 function paintLive(){
  const el=$('live');if(!el){renderThread();return;}
@@ -426,10 +432,10 @@ function paintLive(){
 }
 function renderDrawer(){
  const el=$('drawer-in');if(!el)return;const d=S.detail;if(!d){el.innerHTML='';return;}
- const arts=d.artifacts||[],run=latestRun(),u=run?.usage||{},p=providerById(run?.provider_id),t=duration(run);
+ const arts=d.artifacts||[],run=latestRun(),u=run?.usage||{},p=providerById(run?.provider_id),t=duration(run),requested=run?.create_image&&run.model==='__default__'?'ChatGPT 기본 모델':run?.model||p?.name||'기본 모델';
  const ico=n=>/\.(png|jpe?g|gif|webp|svg)$/i.test(n)?'image':/\.(html?|js|ts|py|css|json|sh)$/i.test(n)?'code':'doc';
  el.innerHTML=`<h3>파일</h3>${arts.length?arts.map(a=>`<button type="button" class="art" data-artifact="${esc(a.id)}" title="${esc(a.path)}"><span class="ico">${icon(ico(a.name))}</span><div><b>${esc(a.name)}</b><small>${size(a.size)}</small></div></button>`).join(''):'<p class="empty-note">파일 없음</p>'}
- ${run?`<h3>마지막 실행</h3><dl class="facts"><dt>요청 모델</dt><dd title="${esc(run.model||'')}">${esc(run.model||p?.name||'기본 모델')}</dd>${run.actual_model?`<dt>제공자 응답 모델</dt><dd title="${esc(run.actual_model)}">${esc(run.actual_model)}</dd>`:''}<dt>상태</dt><dd>${esc(STATUS[run.status]||run.status)}</dd>${t?`<dt>걸린 시간</dt><dd>${t}</dd>`:''}${u.input_tokens?`<dt>입력 토큰</dt><dd>${Number(u.input_tokens).toLocaleString()}</dd>`:''}${u.output_tokens?`<dt>출력 토큰</dt><dd>${Number(u.output_tokens).toLocaleString()}</dd>`:''}</dl>`:''}
+ ${run?`<h3>마지막 실행</h3><dl class="facts"><dt>요청 모델</dt><dd title="${esc(requested)}">${esc(requested)}</dd>${run.actual_model?`<dt>제공자 응답 모델</dt><dd title="${esc(run.actual_model)}">${esc(run.actual_model)}</dd>`:''}<dt>상태</dt><dd>${esc(STATUS[run.status]||run.status)}</dd>${t?`<dt>걸린 시간</dt><dd>${t}</dd>`:''}${u.input_tokens?`<dt>입력 토큰</dt><dd>${Number(u.input_tokens).toLocaleString()}</dd>`:''}${u.output_tokens?`<dt>출력 토큰</dt><dd>${Number(u.output_tokens).toLocaleString()}</dd>`:''}</dl>`:''}
  <h3>작업 폴더</h3><p class="path">${esc(S.data.settings.workspace)}</p>${window.naruDesktop?.revealPath?`<button type="button" class="btn sm" style="margin:0 6px" data-act="reveal-workspace">${icon('folder')}Finder에서 보기</button>`:''}`;
 }
 
@@ -497,21 +503,24 @@ async function enableNotifications(){
 async function send(){
  const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
  if((!text&&!files.length)||S.sending||S.accessSaving||fileReads[draftKey()])return;
- const p=provider();
+ if(S.imageModes[draftKey()]&&!text){toast('만들 이미지의 설명을 입력해 주세요.',true);return;}
+ if(S.imageModes[draftKey()]&&files.some(f=>f.mime)){toast('첨부한 이미지 편집은 아직 지원하지 않아요. 이미지를 빼고 생성해 주세요.',true);return;}
+ const creatingImage=!!S.imageModes[draftKey()],selected=provider(),p=selected||(creatingImage?providerById(S.imageModes[draftKey()].providerId):null);
  if(!p){go('models');toast('먼저 모델을 연결하세요.');return;}
  const acct=accountOf(p);
- if(isAccount(p)&&acct?.execution_blocked){go('models');toast(acct.message||'이 계정 연결은 사용할 수 없습니다. API 연결을 이용하세요.',true);return;}
- if(isAccount(p)&&acct&&acct.available===false){go('models');toast(`${p.name} CLI를 먼저 설치하세요.`,true);return;}
- if(isAccount(p)&&acct&&!acct.authenticated){go('models');toast(`${p.name} 로그인이 필요해요.`,true);return;}
- if(!isAccount(p)&&!S.model&&!p.model){modelMenu();toast('사용할 모델을 고르세요.');return;}
+ if(!creatingImage&&isAccount(p)&&acct?.execution_blocked){go('models');toast(acct.message||'이 계정 연결은 사용할 수 없습니다. API 연결을 이용하세요.',true);return;}
+ if(!creatingImage&&isAccount(p)&&acct&&acct.available===false){go('models');toast(`${p.name} CLI를 먼저 설치하세요.`,true);return;}
+ if(!creatingImage&&isAccount(p)&&acct&&!acct.authenticated){go('models');toast(`${p.name} 로그인이 필요해요.`,true);return;}
+ if(!creatingImage&&!isAccount(p)&&!S.model&&!p.model){modelMenu();toast('사용할 모델을 고르세요.');return;}
  let content=text;const textFiles=files.filter(f=>!f.mime),images=files.filter(f=>f.mime).map(({name,mime,data})=>({name,mime,data}));
  if(textFiles.length)content=(text||'첨부한 파일을 검토해 줘.')+ATTACH_HEAD+textFiles.map(f=>`\n--- 첨부: ${f.name} ---\n${f.text}\n--- 첨부 끝 ---`).join('\n');
  if(content.length>100000){toast('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.',true);return;}
- const epoch=S.epoch,key=draftKey(),model=S.model,mode=S.mode,accessMode=sessionAccess(),accessRevision=S.newAccessRevision,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode();S.sending=true;renderTools();
+ const epoch=S.epoch,key=draftKey(),model=selected?S.model:(p.model||''),mode=S.mode,accessMode=sessionAccess(),accessRevision=S.newAccessRevision,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode(),imageConfig=S.imageModes[draftKey()]?{...S.imageModes[draftKey()]}:null;S.sending=true;renderTools();
  let sid=S.sid;
  try{
-  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode,access_mode:accessMode}});sid=s.id;accessValues[sid]=s.access_mode||accessMode;accessVersions[sid]=(accessVersions[sid]||0)+1;if(S.data?.sessions&&!S.data.sessions.some(x=>x.id===sid))S.data.sessions.unshift({...s,access_mode:accessValues[sid]});if(S.newAccessRevision===accessRevision){S.newAccess='inherit';if(S.view==='chat'&&!S.sid)renderTools();}if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}S.sid=sid;remember(sid);}}
-  await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,...(images.length?{images}:{}),provider_id:p.id,model,mode,skill_ids:skillIds}});
+  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode,access_mode:accessMode}});sid=s.id;accessValues[sid]=s.access_mode||accessMode;accessVersions[sid]=(accessVersions[sid]||0)+1;if(S.data?.sessions&&!S.data.sessions.some(x=>x.id===sid))S.data.sessions.unshift({...s,access_mode:accessValues[sid]});if(S.newAccessRevision===accessRevision){S.newAccess='inherit';if(S.view==='chat'&&!S.sid)renderTools();}if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}if(S.imageModes[key]){S.imageModes[sid]=S.imageModes[key];delete S.imageModes[key];}S.sid=sid;remember(sid);}}
+  await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,...(images.length?{images}:{}),...(imageConfig?{create_image:true,image_provider_id:imageConfig.providerId,image_model:imageConfig.model}:{}),provider_id:p.id,model,mode,skill_ids:skillIds}});
+  if(imageConfig&&S.epoch===epoch&&S.sid===sid&&$('input')?.value===rawText&&((!files.length&&!attachments().length)||attachments()===files))delete S.imageModes[sid];
   if(S.drafts[key]===rawText)delete S.drafts[key];
   if(S.files[key]===files)delete S.files[key];
   if(key!==sid&&S.drafts[sid]===rawText)delete S.drafts[sid];
@@ -640,7 +649,7 @@ function deleteChat(id=S.sid){
  confirmDialog(`“${title}” 대화를 삭제할까요?`,'대화, 실행 기록과 대기 메시지가 삭제돼요. 만든 파일은 그대로 남아요.','삭제',async()=>{
   await api(`/api/sessions/${enc(id)}`,{method:'DELETE'});
   deletedSessionIds.add(String(id));
-  delete S.drafts[id];delete S.files[id];delete accessValues[id];delete accessVersions[id];
+  delete S.drafts[id];delete S.files[id];delete S.imageModes[id];delete accessValues[id];delete accessVersions[id];
   if(S.data?.sessions)S.data.sessions=S.data.sessions.filter(s=>String(s.id)!==String(id));
   if(S.data?.active)delete S.data.active[id];
   if(S.sid===id){if(S.view==='chat')newChat();else{S.epoch++;S.sid=null;S.detail=null;S.live='';remember(null);renderSide();renderTop();}}
@@ -733,6 +742,26 @@ function openSessionAccess(){
  const options=[['inherit',`기본 설정 따르기 (${base})`],['manual','매번 승인'],['auto_approve','자동 승인 (Approve for me)'],['full_access','전체 접근 (Full access)']];
  const dlg=openDialog('이 대화의 도구 승인',`<form class="form" id="session-access-form"><div class="field"><label for="session-access-select">접근 권한</label><select id="session-access-select" name="access_mode" aria-describedby="session-access-help">${options.map(([value,label])=>`<option value="${value}"${value===mode?' selected':''}>${esc(label)}</option>`).join('')}</select><div class="hint" id="session-access-help"><p><strong>매번 승인:</strong> 파일 변경, 명령, 스킬 불러오기와 대화·Git 검색 전에 승인해요.</p><p><strong>자동 승인:</strong> 파일 변경과 터미널 명령을 자동 승인해요. 스킬 불러오기, 대화·Git 검색은 따로 승인해요.</p><p><strong>전체 접근:</strong> 모든 도구를 자동 승인하고 파일 도구의 폴더 제한을 해제해요.</p><p>자동 승인과 전체 접근의 터미널 명령은 샌드박스 없이 사용자 권한으로 실행되어 선택한 폴더 밖의 파일도 읽거나 변경할 수 있어요.</p><p>새 작업부터 적용돼요. 진행 중이거나 재개하는 작업은 기존 권한을 유지하며, 대기 메시지는 등록할 때와 실행할 때 중 더 제한적인 권한을 사용해요.</p></div></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`);
  $('session-access-form').addEventListener('submit',ev=>{ev.preventDefault();const value=$('session-access-select').value;submitForm(ev.currentTarget,async()=>{await saveSessionAccess(value,sid,epoch);if(dlg.open)closeDialog();});});
+}
+function imageProviders(){return providers().filter(p=>(p.kind==='codex'&&(!accountOf(p)||accountOf(p).authenticated))||(p.kind==='openai'&&p.has_key&&String(p.base_url||'').replace(/\/+$/,'')==='https://openrouter.ai/api/v1'));}
+function openImagePicker(){
+ const key=draftKey(),epoch=S.epoch,choices=imageProviders(),active=!!S.imageModes[key];
+ const dlg=openDialog('이미지 만들기',`<form class="form" id="image-model-form"><div class="field"><label for="image-provider">이미지 생성 연결</label><select id="image-provider" required><option value="">연결 선택</option>${choices.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></div><div class="field"><label for="image-model">이미지 생성 모델</label><select id="image-model" required disabled><option value="">연결을 먼저 선택하세요</option></select><span class="hint" id="image-model-status" role="status"></span></div><p class="lead">ChatGPT는 구독 사용량이 적용되고, OpenRouter는 별도 요금이 발생할 수 있어요. 중지하거나 다시 요청해도 사용량이나 요금이 발생할 수 있어요.</p>${choices.length?'':'<button type="button" class="btn" data-act="image-connect">모델 연결하기</button>'}<div class="actions">${active?'<button type="button" class="btn ghost" id="image-mode-clear">이미지 만들기 끄기</button>':''}<button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">선택</button></div></form>`);
+ const select=$('image-provider'),models=$('image-model'),status=$('image-model-status');let request=0;
+ select.addEventListener('change',async()=>{
+  const id=select.value,current=++request;models.disabled=true;models.innerHTML='<option value="">모델 불러오는 중…</option>';status.textContent='';
+  if(!id){models.innerHTML='<option value="">연결을 먼저 선택하세요</option>';return;}
+  try{
+   const result=await api(`/api/providers/${enc(id)}/image-models`);if(!dlg.open||current!==request)return;
+   const list=Array.isArray(result.models)?result.models.filter(x=>typeof x==='string'&&x):[];
+   const isCodex=choices.find(p=>String(p.id)===id)?.kind==='codex';
+   models.innerHTML='<option value="">모델 선택</option>'+list.map(x=>`<option value="${esc(x)}">${esc(isCodex&&x==='__default__'?'ChatGPT 기본 모델':x)}</option>`).join('');models.disabled=!list.length;
+   if(isCodex&&list.includes('__default__'))models.value='__default__';
+   if(!list.length)status.textContent='사용할 수 있는 이미지 모델이 없어요.';
+  }catch(err){if(!dlg.open||current!==request)return;models.innerHTML='<option value="">모델을 불러오지 못했어요</option>';status.textContent=err.message;}
+ });
+ $('image-model-form').addEventListener('submit',ev=>{ev.preventDefault();submitForm(ev.currentTarget,async()=>{if(S.epoch!==epoch||draftKey()!==key)throw new Error('대화가 바뀌었어요. 다시 선택해 주세요.');const providerId=select.value,model=models.value;if(!choices.some(p=>String(p.id)===providerId)||!model||models.disabled)throw new Error('연결과 이미지 모델을 선택해 주세요.');S.imageModes[key]={providerId,model};closeDialog();renderTools();});});
+ if(active)$('image-mode-clear').addEventListener('click',()=>{delete S.imageModes[key];closeDialog();if(draftKey()===key)renderTools();});
 }
 function editQueue(id){
  const sid=S.sid,item=queuePending().find(q=>String(q.id)===String(id));if(!sid||!item)return;
@@ -925,6 +954,8 @@ const ACT={
  'delete-chat':el=>deleteChat(el.dataset.id),
  'rename':()=>startRename(),
  'attach':()=>$('file-input')?.click(),
+ 'image-mode':()=>openImagePicker(),
+ 'image-connect':()=>{closeDialog();go('models');},
  'remove-file':el=>{const key=draftKey();S.files[key]=attachments().filter((_,i)=>i!==+el.dataset.id);renderChips();},
  'model-menu':()=>pop&&pop.anchor===$('model-chip')?closePop():modelMenu(),
  'skills-menu':()=>pop&&pop.anchor===$('skill-chip')?closePop():skillsMenu(),
@@ -1039,7 +1070,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,imageSource,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,deleteChat,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,renderSide,deleteChat,S};return;}
 setInterval(tick,280);
 boot();
 })();

@@ -16,6 +16,7 @@ import queue
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
@@ -187,6 +188,87 @@ def _json_request(provider, suffix, payload=None, timeout=15):
             return json.loads(body)
     except Exception as exc:
         raise _http_error(exc, provider) from None
+
+
+def _image_provider(provider):
+    if provider.get('kind') == 'codex':
+        return
+    if provider.get('kind') != 'openai' or _base(provider) != 'https://openrouter.ai/api/v1':
+        raise ProviderError('이미지 생성은 OpenRouter 연결에서 사용할 수 있습니다.')
+    if not provider.get('api_key'):
+        raise ProviderError('이미지 생성 전에 OpenRouter를 연결해 주세요.')
+
+
+def image_models(provider):
+    _image_provider(provider)
+    if provider.get('kind') == 'codex': return ['__default__']
+    data = _json_request(provider, '/images/models')
+    return sorted({item['id'] for item in data.get('data', []) if isinstance(item, dict) and isinstance(item.get('id'), str) and item['id']})
+
+
+def generate_image(provider, model, prompt, cancel):
+    _image_provider(provider)
+    if provider.get('kind') == 'codex': raise ProviderError('ChatGPT 이미지는 계정 생성 경로를 사용해야 합니다.')
+    if not isinstance(model, str) or not model.strip() or len(model) > 200:
+        raise ProviderError('이미지 생성 모델을 선택해 주세요.')
+    if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20000:
+        raise ProviderError('이미지 설명을 1~20,000자로 입력해 주세요.')
+    if cancel.is_set():
+        raise CancelledError('실행이 취소되었습니다.')
+    inbox = queue.Queue(maxsize=1)
+    def work():
+        try: inbox.put((True, _json_request(provider, '/images', {'model': model, 'prompt': prompt}, timeout=180)))
+        except Exception as exc: inbox.put((False, exc))
+    threading.Thread(target=work, daemon=True, name='naru-image-generation').start()
+    while True:
+        if cancel.is_set(): raise CancelledError('실행이 취소되었습니다.')
+        try: ok, data = inbox.get(timeout=.1); break
+        except queue.Empty: continue
+    if not ok: raise data
+    rows = data.get('data') if isinstance(data, dict) else None
+    if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+        raise ProviderError('이미지 생성 결과를 받지 못했습니다.')
+    encoded = rows[0].get('b64_json')
+    if not isinstance(encoded, str): raise ProviderError('이미지 생성 결과를 읽을 수 없습니다.')
+    try: raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error): raise ProviderError('이미지 생성 결과를 읽을 수 없습니다.') from None
+    if not raw or len(raw) > 12 * 1024 * 1024: raise ProviderError('이미지 결과 크기가 허용 범위를 벗어났습니다.')
+    mime = rows[0].get('media_type')
+    if not mime:
+        mime = 'image/png' if raw.startswith(b'\x89PNG\r\n\x1a\n') else 'image/jpeg' if raw.startswith(b'\xff\xd8\xff') else 'image/webp' if len(raw)>=12 and raw[:4]==b'RIFF' and raw[8:12]==b'WEBP' else 'image/gif' if raw.startswith((b'GIF87a',b'GIF89a')) else ''
+    if mime not in IMAGE_TYPES: raise ProviderError('생성 결과가 지원되지 않는 이미지 형식입니다. PNG, JPEG, WebP 또는 GIF 모델을 선택해 주세요.')
+    # Verify the returned media type before making it available to the renderer.
+    _validate_generated_signature(mime,raw)
+    return {'bytes':raw, 'mime':mime, 'usage':data.get('usage') if isinstance(data.get('usage'),dict) else {}}
+
+
+def _validate_generated_signature(mime, raw):
+    valid = {'image/png':raw.startswith(b'\x89PNG\r\n\x1a\n'), 'image/jpeg':raw.startswith(b'\xff\xd8\xff'), 'image/gif':raw.startswith((b'GIF87a',b'GIF89a')), 'image/webp':len(raw)>=12 and raw[:4]==b'RIFF' and raw[8:12]==b'WEBP'}
+    if not valid.get(mime): raise ProviderError('생성된 이미지 형식이 내용과 일치하지 않습니다.')
+
+
+def codex_generated_image(thread_id, started):
+    try: thread_id=str(uuid.UUID(str(thread_id)))
+    except (ValueError, TypeError, AttributeError): raise ProviderError('ChatGPT 이미지 생성 결과를 확인하지 못했습니다.') from None
+    home=Path(os.environ.get('CODEX_HOME') or (Path.home()/'.codex')).expanduser().resolve()
+    root=home/'generated_images';folder=root/thread_id
+    if root.is_symlink() or folder.is_symlink() or not folder.is_dir() or folder.resolve()!=folder:
+        raise ProviderError('ChatGPT가 생성한 이미지를 찾지 못했습니다.')
+    # The CLI assigns a fresh thread ID; inspect only that run's output directory.
+    paths=sorted(p for p in folder.iterdir() if p.name.startswith(('call_','exec-')) and p.suffix.lower() in ('.png','.jpg','.jpeg','.webp','.gif'))
+    if not paths:raise ProviderError('ChatGPT가 생성한 이미지를 찾지 못했습니다.')
+    if len(paths)!=1:raise ProviderError('이미지 생성 결과를 구분하지 못했습니다. 다시 시도해 주세요.')
+    path=paths[0]
+    try:
+        fd=os.open(path,os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW)
+        with os.fdopen(fd,'rb') as f:
+            st=os.fstat(f.fileno())
+            if not stat.S_ISREG(st.st_mode) or st.st_size>12*1024*1024 or st.st_mtime<started-5:raise ValueError('invalid image')
+            raw=f.read(12*1024*1024+1)
+    except (OSError,ValueError):raise ProviderError('ChatGPT 이미지 결과를 안전하게 읽지 못했습니다.') from None
+    mime={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif'}[path.suffix.lower()]
+    _validate_generated_signature(mime,raw)
+    return {'bytes':raw,'mime':mime,'usage':{}}
 
 
 def _stream_request(provider, suffix, payload, cancel):
@@ -760,7 +842,9 @@ def _kill_group(process):
             pass
 
 
-def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None, _planner=False, images=None):
+def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None, _planner=False, images=None, _image_generation=False):
+    if _image_generation and (mode != 'chat' or _planner):
+        raise ProviderError('이미지 생성은 제한된 대화 경로에서만 실행할 수 있습니다.')
     binary = _codex_executable()
     if not binary:
         raise ProviderError("Codex CLI가 설치되어 있지 않습니다.")
@@ -778,8 +862,11 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
         args += ["--output-schema", str(_schema), "--output-last-message", str(final_path)]
     if _planner or mode == "chat":
         # Plain chat must not inherit action-capable CLI tools or project instructions.
-        for feature in ("shell_tool", "unified_exec", "apps", "plugins", "remote_plugin", "memories", "multi_agent", "hooks", "browser_use", "browser_use_external", "computer_use", "image_generation", "view_image", "workspace_dependencies", "code_mode_host", "goals", "skill_search", "sleep_tool"):
+        for feature in ("shell_tool", "unified_exec", "apps", "plugins", "remote_plugin", "memories", "multi_agent", "hooks", "browser_use", "browser_use_external", "computer_use", "view_image", "workspace_dependencies", "code_mode_host", "goals", "skill_search", "sleep_tool"):
             args += ["--disable", feature]
+        if _image_generation:
+            args += ['--enable','image_generation','-c','features.code_mode.direct_only_tool_namespaces=["image_gen"]']
+        else:args += ['--disable','image_generation']
         args += ["-c", 'web_search="disabled"', "-c", 'skills.bundled.enabled=false', "-c", 'skills.include_instructions=false', "-c", 'project_doc_max_bytes=0', "-c", 'mcp_servers={}']
     if model and str(model).strip():
         args += ["--model", str(model).strip()]
@@ -821,7 +908,7 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
     feeder.start()
     text_by_id, order, usage = {}, [], {}
     deadline = time.monotonic() + 1800
-    done, failed = False, None
+    done, failed, thread_id = False, None, None
     try:
         while True:
             if cancel.is_set():
@@ -842,6 +929,7 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
                 continue
             kind = event.get("type", "")
             if kind == "thread.started":
+                thread_id=event.get('thread_id')
                 on_event("status", {"text": "ChatGPT 연결에서 작업을 시작했습니다."})
             elif kind in ("item.started", "item.updated", "item.completed"):
                 item = event.get("item", {})
@@ -885,9 +973,11 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
         content = "\n\n".join(text_by_id[i] for i in order if text_by_id[i])
         if final_path and final_path.exists():
             content = final_path.read_text(encoding="utf-8").strip()
-        if not content:
+        if not content and not _image_generation:
             raise ProviderError("Codex가 최종 응답을 반환하지 않았습니다.")
-        return {"content": content, "usage": usage}
+        result={"content": content, "usage": usage}
+        if _image_generation:result['thread_id']=thread_id
+        return result
     finally:
         _kill_group(process)
         feeder.join(timeout=1)
