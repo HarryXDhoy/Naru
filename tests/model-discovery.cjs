@@ -28,6 +28,10 @@ S.data={providers:[chat,local],accounts:{codex:{available:true,authenticated:tru
  html=approvalHTML({id:'abc',tool:'search_sessions',arguments:{query:'<private>'}});
  assert(html.includes('이전 대화 검색')&&html.includes('현재 모델 제공자')&&html.includes('&lt;private&gt;'));
  assert(!html.includes('approve_all'),'search requires per-query approval');
+ S.data.skills=[{id:'browser',name:'Ego <browser>'}];
+ html=approvalHTML({id:'skill-approval',tool:'load_skill',arguments:{skill_id:'browser'}});
+ assert(html.includes('스킬 불러오기')&&html.includes('Ego &lt;browser&gt;')&&html.includes('모델 제공자'));
+ assert(!html.includes('approve_all'),'loading a skill requires an individual approval');
  html=approvalHTML({id:'def',tool:'git_diff',arguments:{staged:true}});
  assert(html.includes('Git 변경 내용 읽기')&&html.includes('현재 모델 제공자')&&html.includes('스테이징된 변경'));
  assert(!html.includes('approve_all'),'diff requires fresh approval');

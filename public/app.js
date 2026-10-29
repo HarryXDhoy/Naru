@@ -314,6 +314,8 @@ function buildSteps(events){
 function stepLabel(name,a,r){
  a=a||{};
  switch(name){
+  case 'load_skill':return {icon:'skill',what:'스킬 불러오기',target:(S.data?.skills||[]).find(s=>String(s.id)===String(a.skill_id))?.name||a.skill_id||''};
+  case 'read_skill_file':return {icon:'eye',what:'스킬 파일 읽기',target:base(a.path)};
   case 'git_status':return {icon:'terminal',what:'Git 상태',target:''};
   case 'git_diff':return {icon:'terminal',what:'변경 내용',target:a.staged?'스테이징됨':'작업 중'};
   case 'todo':return {icon:'check',what:'작업 목록',target:'',note:Array.isArray(r?.items)?`${r.items.filter(i=>i.status==='completed').length}/${r.items.length} 완료`:''};
@@ -360,13 +362,14 @@ function approvalHTML(a){
  const g=a.arguments||{};let title='',where='',body='',warn='';
  if(a.tool==='write_file'){title=`${base(g.path)} ${g.overwrite?'덮어쓰기':'만들기'}`;where=g.path;body=`<div class="preview"><pre>${esc(String(g.content||'').slice(0,20000))}</pre></div>`;}
  else if(a.tool==='edit_file'){title=`${base(g.path)} 수정`;where=g.path;body=`<div class="preview">${diffHTML(g.old_text||'',g.new_text||'')}</div>`;}
+ else if(a.tool==='load_skill'){title='스킬 불러오기';warn='스킬 폴더 경로와 지침, 참조 파일이 현재 모델 제공자에게 전달될 수 있어요.';const skill=(S.data?.skills||[]).find(s=>String(s.id)===String(g.skill_id));body=`<div class="preview"><pre>${esc(skill?.name||g.skill_id||'')}</pre></div>`;}
  else if(a.tool==='search_sessions'){title='이전 대화 검색';warn='검색 결과가 현재 모델 제공자에게 전달됩니다.';body=`<div class="preview"><pre>${esc(g.query||'')}</pre></div>`;}
  else if(a.tool==='git_diff'){title='Git 변경 내용 읽기';warn='변경 내용이 현재 모델 제공자에게 전달됩니다. 비밀 정보가 포함될 수 있어요.';body=`<div class="preview"><pre>${g.staged?'스테이징된 변경':'작업 중인 변경'}</pre></div>`;}
  else if(a.tool==='run_command'){title='명령 실행';warn='이 Mac에서 내 사용자 권한으로 실행돼요.';body=`<div class="preview"><pre>${esc(g.command||'')}</pre></div>`;}
  else{title=a.tool;body=`<div class="preview"><pre>${esc(JSON.stringify(g,null,2))}</pre></div>`;}
  if(where&&where===base(where))where='';
- const glyph=a.tool==='run_command'?'terminal':a.tool==='edit_file'?'pen':'doc';
- return `<div class="approve" role="group" aria-label="실행 전 확인"><div class="head">${icon(glyph)}<h4>${esc(title)}</h4></div>${where?`<p class="where">${esc(where)}</p>`:''}${warn?`<p class="warn">${warn}</p>`:''}${body}<div class="row"><button type="button" class="btn ghost" data-approval="${esc(a.id)}" data-decision="deny">거절</button><span class="grow"></span>${['search_sessions','git_diff'].includes(a.tool)?'':`<button type="button" class="btn" data-approval="${esc(a.id)}" data-decision="approve_all" title="이번 작업에서 같은 종류는 다시 묻지 않아요">모두 허용</button>`}<button type="button" class="btn primary" data-approval="${esc(a.id)}" data-decision="approve" title="허용 (⌘⏎)">허용</button></div></div>`;
+ const glyph=a.tool==='run_command'?'terminal':a.tool==='edit_file'?'pen':a.tool==='load_skill'?'skill':'doc';
+ return `<div class="approve" role="group" aria-label="실행 전 확인"><div class="head">${icon(glyph)}<h4>${esc(title)}</h4></div>${where?`<p class="where">${esc(where)}</p>`:''}${warn?`<p class="warn">${warn}</p>`:''}${body}<div class="row"><button type="button" class="btn ghost" data-approval="${esc(a.id)}" data-decision="deny">거절</button><span class="grow"></span>${['search_sessions','git_diff','load_skill'].includes(a.tool)?'':`<button type="button" class="btn" data-approval="${esc(a.id)}" data-decision="approve_all" title="이번 작업에서 같은 종류는 다시 묻지 않아요">모두 허용</button>`}<button type="button" class="btn primary" data-approval="${esc(a.id)}" data-decision="approve" title="허용 (⌘⏎)">허용</button></div></div>`;
 }
 function runHTML(run,isLatest){
  const d=S.detail,steps=buildSteps(d.events.filter(e=>e.run_id===run.id)),active=ACTIVE.includes(run.status);
@@ -677,13 +680,36 @@ function editSkill(id,instructions='',draft=null){
 function parseSkillFile(text,filename){
  if(!text.trim()||text.length>20000)throw Error('스킬 지침은 1~20,000자여야 해요.');
  const front=text.replace(/^\uFEFF/,'').match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1]||'';
- const field=key=>{let v=front.match(new RegExp('^'+key+':\\s*(.*)$','m'))?.[1]?.trim()||'';if(v==='>'||v==='|')return '';if(v.startsWith('"')&&v.endsWith('"')){try{return JSON.parse(v)}catch{return v.slice(1,-1)}}if(v.startsWith("'")&&v.endsWith("'"))return v.slice(1,-1).replace(/''/g,"'");return v;};
+ const field=key=>{const match=front.match(new RegExp('^'+key+':[ \\t]*(.*)$','m'));let v=match?.[1]?.trim()||'';if(/^[>|][+-]?$/.test(v)){const lines=front.slice(match.index+match[0].length).split(/\r?\n/).slice(1),content=[];for(const line of lines){if(line&&!/^[ \t]/.test(line))break;content.push(line.trim());}return content.join(v[0]==='>'?' ':'\n').trim();}if(v.startsWith('"')&&v.endsWith('"')){try{return JSON.parse(v)}catch{return v.slice(1,-1)}}if(v.startsWith("'")&&v.endsWith("'"))return v.slice(1,-1).replace(/''/g,"'");return v;};
  return {name:(field('name')||filename.replace(/\.md$/i,'')||'가져온 스킬').slice(0,100),description:field('description').slice(0,300),instructions:text,enabled:true};
 }
 function importSkill(){
  const picker=document.createElement('input');picker.type='file';picker.accept='.md,text/markdown';
  picker.addEventListener('change',async()=>{const file=picker.files?.[0];if(!file)return;try{if(file.size>80000)throw Error('스킬 지침은 20,000자 이하여야 해요.');editSkill(null,'',parseSkillFile(await file.text(),file.name));}catch(err){toast(err.message||'파일을 읽지 못했어요.',true);}});
  picker.click();
+}
+function skillDiscoveryHTML(list){
+ if(!list.length)return '<p class="hint">설치된 스킬을 찾지 못했어요. 폴더를 직접 연결할 수 있어요.</p>';
+ return list.map(s=>`<div class="item"><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}<span class="sub" title="${esc(s.path)}">${esc(s.path)}</span></div><div class="acts2">${s.registered?'<span class="badge done">연결됨</span>':`<button type="button" class="btn sm" data-act="import-discovered-skill" data-path="${esc(s.path)}">연결하고 선택</button>`}</div></div>`).join('');
+}
+async function connectSkillFolder(path){
+ const skill=await api('/api/skills/import',{method:'POST',body:{path}});
+ await refreshState();if(skill.enabled&&!S.skillIds.includes(String(skill.id)))S.skillIds.push(String(skill.id));
+ closeDialog();if(S.view==='skills')renderSkills();toast(skill.enabled?'스킬을 연결하고 선택했어요':'기존 스킬이 꺼져 있어요. 스킬 화면에서 켜 주세요.');
+}
+async function discoverSkills(){
+ const dlg=openDialog('설치된 스킬 찾기','<div class="panel" id="skill-discover-results"><p class="hint">찾는 중…</p></div>',{wide:true,desc:'추가할 스킬을 직접 선택하세요. 지침은 연결 시 복사하고 참조 파일은 실행 시 읽어요. 선택하면 폴더 경로와 지침, 참조 내용이 모델 제공자에게 전달될 수 있어요. 지침 원본이 바뀌면 삭제 후 다시 연결하세요. 외부 도구는 별도로 설치·연결해야 해요.'});
+ const results=$('skill-discover-results');
+ try{const data=await api('/api/skills/discover');if(dlg.open&&$('skill-discover-results')===results)results.innerHTML=skillDiscoveryHTML(Array.isArray(data.skills)?data.skills:[]);}
+ catch(err){if(dlg.open&&$('skill-discover-results')===results)results.innerHTML=`<p class="hint bad">${esc(err.message||'스킬을 찾지 못했어요.')}</p>`;}
+}
+async function importDiscoveredSkill(el){
+ el.disabled=true;try{await connectSkillFolder(el.dataset.path);}catch(err){el.disabled=false;dialogError(err.message);}
+}
+function importSkillFolder(){
+ const picker=window.naruDesktop?.chooseDirectory?`<button type="button" class="btn" data-act="pick-folder" data-id="skill-folder-path">${icon('folder')}고르기</button>`:'';
+ openDialog('스킬 폴더 연결',`<form class="form" id="skill-folder-form"><div class="field"><label for="skill-folder-path">SKILL.md가 들어 있는 폴더</label><div class="inrow"><input id="skill-folder-path" name="path" required placeholder="예: /Users/name/.agents/skills/ego-browser">${picker}</div><span class="hint">지침은 연결 시 복사하고 참조 파일은 실행 시 읽어요. 선택하면 폴더 경로와 지침, 참조 내용이 모델 제공자에게 전달될 수 있어요. 지침 원본이 바뀌면 삭제 후 다시 연결하세요. 외부 도구는 별도로 설치·연결해야 해요.</span></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">연결하고 선택</button></div></form>`,{wide:true,desc:'연결 후 입력창의 스킬 메뉴에서 선택하세요. 파일 변경과 명령 실행은 도구 승인 설정을 따라요.'});
+ $('skill-folder-form').addEventListener('submit',ev=>{ev.preventDefault();const path=$('skill-folder-path').value.trim();if(!path){dialogError('스킬 폴더를 선택하세요.');return;}return submitForm(ev.target,()=>connectSkillFolder(path));});
 }
 function saveMemoryDialog(content){
  openDialog('메모리로 저장',`<form class="form" id="mem-form"><div class="field"><label for="mf-text">기억할 내용</label><textarea id="mf-text" rows="7" maxlength="4000" required>${esc(String(content).slice(0,4000))}</textarea></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{desc:'다음 대화부터 함께 전달돼요. 필요한 부분만 남기세요.',wide:true});
@@ -730,7 +756,7 @@ function renderModels(){
 }
 function renderSkills(){
  const list=S.data.skills||[];
- $('main').innerHTML=page('스킬',`<p class="lead">자주 하는 일의 방식을 적어 두면 대화에서 골라 쓸 수 있어요.</p><div class="panel">${list.length?list.map(s=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit','편집','edit-skill',s.id)}${iconBtn('trash','삭제','delete-skill',s.id)}</div></div>`).join(''):'<div class="blank"><p>아직 스킬이 없어요.</p></div>'}</div>`,`<div class="acts2"><button type="button" class="btn" data-act="import-skill">가져오기</button><button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button></div>`);
+ $('main').innerHTML=page('스킬',`<p class="lead">입력창에서 스킬을 직접 선택하거나, 에이전트가 필요할 때 불러오도록 할 수 있어요. 지침은 모델 제공자에게 전달되며, 파일과 명령 사용은 에이전트 모드와 도구 승인 설정을 따라요.</p><div class="panel">${list.length?list.map(s=>`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}${s.source_dir?`<span class="sub" title="${esc(s.source_dir)}">폴더 연결됨</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit','편집','edit-skill',s.id)}${iconBtn('trash','삭제','delete-skill',s.id)}</div></div>`).join(''):'<div class="blank"><p>아직 스킬이 없어요.</p></div>'}</div>`,`<div class="skill-actions"><button type="button" class="btn" data-act="discover-skills">설치된 스킬 찾기</button><button type="button" class="btn" data-act="import-skill-folder">스킬 폴더 연결</button><button type="button" class="btn" data-act="import-skill">파일만 가져오기</button><button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button></div>`);
 }
 function renderMemory(){
  const list=S.data.memories||[];
@@ -746,8 +772,8 @@ function renderSettings(){
  <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">실행 시 루트의 프로젝트 지침 파일은 연결된 모델 제공자에 전달돼요. 파일 접근 범위는 아래 도구 승인 설정에 따라 달라져요.</span></div>
  <div class="field"><label for="st-rp">보고서 폴더</label><div class="inrow"><input id="st-rp" name="report_directory" required value="${esc(x.report_directory)}">${picker('st-rp')}</div></div>
  <h2>도구 승인</h2><div class="field"><label for="st-access">접근 권한</label><select id="st-access" name="access_mode" aria-describedby="st-access-help">${[['manual','매번 승인'],['auto_approve','자동 승인 (Approve for me)'],['full_access','전체 접근 (Full access)']].map(([k,n])=>`<option value="${k}"${(x.access_mode||'manual')===k?' selected':''}>${n}</option>`).join('')}</select><div id="st-access-help" class="hint">
- <p><strong>매번 승인:</strong> 파일 쓰기·수정, 터미널 명령, 이전 대화 검색, Git 변경 조회 전에 승인해요.</p>
- <p><strong>자동 승인:</strong> 작업·보고서 폴더의 파일 쓰기·수정과 터미널 명령을 자동 승인해요. 이전 대화 검색과 Git 변경 조회는 각각 승인해요.</p>
+ <p><strong>매번 승인:</strong> 파일 쓰기·수정, 터미널 명령, 스킬 불러오기, 이전 대화 검색, Git 변경 조회 전에 승인해요.</p>
+ <p><strong>자동 승인:</strong> 작업·보고서 폴더의 파일 쓰기·수정과 터미널 명령을 자동 승인해요. 스킬 불러오기, 이전 대화 검색, Git 변경 조회는 각각 승인해요.</p>
  <p><strong>전체 접근:</strong> Naru의 파일 도구가 현재 macOS 사용자에게 허용된 모든 경로에 접근하며 모든 도구를 자동 승인해요. 이전 대화와 Git 변경 내용이 연결된 모델 제공자에게 전달될 수 있어요.</p>
  <p>자동 승인과 전체 접근의 터미널 명령은 샌드박스 없이 현재 사용자 권한으로 실행되며, 선택한 폴더 밖의 파일도 읽거나 변경할 수 있어요. 설정은 새 작업부터 적용되고 진행 중이거나 재개하는 작업은 기존 권한을 유지해요.</p></div></div>
  <h2>실행</h2><div class="grid2"><div class="field"><label for="st-steps">한 번에 쓰는 도구 단계</label><input id="st-steps" name="max_steps" type="number" min="1" max="50" required value="${esc(x.max_steps||12)}"></div><div class="field"><label for="st-tok">최대 출력 토큰</label><input id="st-tok" name="max_output_tokens" type="number" min="256" max="32768" step="256" required value="${esc(x.max_output_tokens||4096)}"></div></div>
@@ -810,6 +836,9 @@ const ACT={
  'use-provider':el=>{const p=providerById(el.dataset.id);if(!p)return;S.providerId=p.id;S.model=p.model||'';newChat();},
  'add-skill':()=>editSkill(),
  'import-skill':()=>importSkill(),
+ 'import-skill-folder':()=>importSkillFolder(),
+ 'discover-skills':()=>discoverSkills(),
+ 'import-discovered-skill':el=>importDiscoveredSkill(el),
  'edit-skill':el=>editSkill(el.dataset.id),
  'delete-skill':el=>confirmDialog('스킬을 삭제할까요?','이 스킬의 지침이 지워져요.','삭제',async()=>{await api(`/api/skills/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();renderSkills();toast('삭제했어요');}),
  'skill-toggle':async el=>{const s=S.data.skills.find(x=>String(x.id)===el.dataset.id);if(!s)return;el.setAttribute('aria-checked',String(!s.enabled));try{await api('/api/skills',{method:'POST',body:{...s,enabled:!s.enabled}});await refreshState();renderSkills();}catch(err){toast(err.message,true);renderSkills();}},
@@ -884,7 +913,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,parseSkillFile,importSkill,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,S};return;}
 setInterval(tick,280);
 boot();
 })();
