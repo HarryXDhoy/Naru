@@ -44,7 +44,7 @@ const input=c.document.getElementById('input');input.value='first request';S.dra
  assert.equal(notificationRequests,0,'sending must not ask for notification permission');
  assert.match(notificationHTML(),/알림 켜기/);
  await enableNotifications();assert.equal(notificationRequests,1,'explicit enable requests permission');
- assert.match(c.document.getElementById('notification-setting').innerHTML,/허용되어 있어요/);
+ assert.match(c.document.getElementById('notification-setting').innerHTML,/켜짐/);
  await enableNotifications();assert.equal(notificationRequests,1,'already granted permission is not requested again');
  pref.set('theme','light');assert.equal(nativePrefs.theme,'light');
  // A fresh renderer/localStorage origin should read the durable desktop value.
