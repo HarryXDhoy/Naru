@@ -1,6 +1,6 @@
 # Dotted texture — ego(lite) Style extension
 
-A fine, evenly spaced dot grid adds a quiet technical texture over the blue hero and at the edge of the sidebar. The image supplied by the user is the visual reference. This is an extension used by Naru, not a claim that the original Claude artifact has been changed.
+A fine, evenly spaced dot grid adds a quiet technical texture over the blue hero and at the edge of the sidebar. The image supplied by the user is the visual reference. The same Dotted texture (Naru) rules are recorded in the Claude ego(lite) Style design system.
 
 ## Tokens
 
