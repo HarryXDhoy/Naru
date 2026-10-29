@@ -33,8 +33,9 @@ function trustedSender(event, expectedOrigin) {
 }
 
 function validPreference(key, value) {
-  if (value === null) return ['theme', 'side', 'drawer', 'session'].includes(key);
+  if (value === null) return ['theme', 'side', 'drawer', 'session', 'language'].includes(key);
   if (typeof value !== 'string') return false;
+  if (key === 'language') return ['ko', 'en'].includes(value);
   if (key === 'theme') return ['light', 'dark', 'system'].includes(value);
   if (key === 'side' || key === 'drawer') return value === '0' || value === '1';
   if (key === 'session') return /^[a-zA-Z0-9_-]{1,128}$/.test(value);

@@ -42,3 +42,5 @@ test('persistent UI preferences accept only bounded known values', () => {
   assert.equal(validPreference('session', null), true);
   assert.equal(validPreference('unknown', null), false);
 });
+
+test("language preference accepts Korean and English only",()=>{const {validPreference}=require("./security.cjs");assert.equal(validPreference("language","ko"),true);assert.equal(validPreference("language","en"),true);assert.equal(validPreference("language","xx"),false);});
