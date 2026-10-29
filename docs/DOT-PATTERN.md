@@ -21,4 +21,4 @@ The CSS custom properties in `public/styles.css` are the source of truth:
 - Keep conversation text, form inputs, menus and approval panels on solid surfaces for legibility. The halftone artwork drifts slowly, pauses when the window is hidden, and remains still when reduced motion is requested.
 - Use the same CSS-pixel spacing on narrow screens. Do not rasterize or stretch a bitmap: the CSS pattern remains sharp on Retina and other displays.
 
-The Defined hero uses `public/defined-halftone.svg` for varied dot sizes and colors. `public/hero-motion.css` moves that artwork beneath the fine dot overlay. This is an approximation; the design-system HalftoneField source was not available locally.
+The hero uses the HalftoneField shader from the user’s ego(lite) design-system bundle, with theme-aware output and a pointer lens. `public/defined-halftone.svg` provides the fallback when WebGL is unavailable.

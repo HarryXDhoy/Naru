@@ -1,5 +1,5 @@
 'use strict';
-// Exercise the real HeroHorizon lifecycle with a deterministic browser clock.
+// Exercise the actual HalftoneField lifecycle with a deterministic browser clock.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -16,7 +16,8 @@ function target(extra = {}) {
   }, extra);
 }
 function environment({ webgl = true, reduced = false, compile = true, link = true } = {}) {
-  let next = 0, t = 0, draws = 0;
+  let next = 0, t = 0, draws = 0, scheme = 'dark';
+  const uniforms = {};
   const frames = new Map();
   const reduce = target({ matches: reduced });
   const color = target({ matches: false });
@@ -25,6 +26,8 @@ function environment({ webgl = true, reduced = false, compile = true, link = tru
     createShader: () => ({}), createProgram: () => ({}), createBuffer: () => ({}),
     getShaderParameter: () => compile, getProgramParameter: () => link,
     getAttribLocation: () => 0, getUniformLocation: (_p, n) => n,
+    uniform1f: (name, value) => { uniforms[name] = value; },
+    uniform2f: (name, x, y) => { uniforms[name] = [x, y]; },
     getExtension: () => ({ loseContext() {} }), drawArrays: () => { draws++; },
   }, { get(o, key) { return key in o ? o[key] : () => {}; } });
   const box = target({
@@ -46,7 +49,7 @@ function environment({ webgl = true, reduced = false, compile = true, link = tru
   const context = {
     document, window: target({ IntersectionObserver: FakeIntersectionObserver, ResizeObserver: FakeResizeObserver }), devicePixelRatio: 1, performance: { now: () => t },
     matchMedia: q => q.includes('reduced-motion') ? reduce : color,
-    getComputedStyle: () => ({ getPropertyValue: () => '#152256' }),
+    getComputedStyle: () => ({ colorScheme: scheme, getPropertyValue: () => '#152256' }),
     requestAnimationFrame(fn) { const id = ++next; frames.set(id, fn); return id; },
     cancelAnimationFrame(id) { frames.delete(id); },
     IntersectionObserver: FakeIntersectionObserver, ResizeObserver: FakeResizeObserver,
@@ -60,7 +63,7 @@ function environment({ webgl = true, reduced = false, compile = true, link = tru
   vm.runInContext(hero + '\nthis.start = startHero; this.stop = stopHero;', context);
   return {
     start: () => context.start(box), stop: () => context.stop(), box, document, reduce,
-    pending: () => frames.size, draws: () => draws,
+    pending: () => frames.size, draws: () => draws, uniforms, setScheme(value) { scheme = value; color.emit('change'); },
     intersection(visible) { assert.ok(intersection && !intersection.disconnected); intersection.cb([{ isIntersecting: visible }]); },
     frame() { const first = frames.entries().next(); if (first.done) return false; const [id, fn] = first.value; frames.delete(id); t += 20; fn(t); return true; },
   };
@@ -130,4 +133,26 @@ test('context loss removes the canvas and allows a later fresh hero', () => {
   assert.equal(h.box.children.length, 1, 'later navigation can create a fresh canvas');
   assert.ok(h.pending() > 0, 'new hero renders normally');
   h.stop();
+});
+
+
+test('halftone animation advances and pointer lens opens then closes', () => {
+  const h = environment(); h.start(); h.frame();
+  const first = h.uniforms.time; h.frame();
+  assert.ok(h.uniforms.time > first, 'shader time advances');
+  assert.equal(h.uniforms.cell, 9, 'uses the design system dot pitch');
+  h.box.emit('pointermove', { clientX: 400, clientY: 200 }); h.frame();
+  assert.ok(h.uniforms.lens > 0, 'pointer opens the lens');
+  const lens = h.uniforms.lens; h.box.emit('pointerleave'); h.frame();
+  assert.ok(h.uniforms.lens < lens, 'lens closes when pointer leaves');
+  h.stop(); assert.equal(h.box.count('pointerleave'), 0);
+});
+
+
+test('theme changes update the halftone palette without restarting the hero', () => {
+  const h = environment(); h.start();
+  assert.equal(h.uniforms.lightTheme, 0);
+  h.setScheme('light'); assert.equal(h.uniforms.lightTheme, 1);
+  h.setScheme('dark'); assert.equal(h.uniforms.lightTheme, 0);
+  assert.equal(h.box.children.length, 1); h.stop();
 });

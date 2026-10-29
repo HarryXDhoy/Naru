@@ -96,7 +96,7 @@ Electron 45.1.0, Python 표준 라이브러리, 번들한 Mona Sans 글꼴(SIL O
 
 ```text
 server/      로컬 API, SQLite, 도구 실행, 모델 어댑터(providers.py), 계정 CLI 연결(accounts.py)
-public/      데스크톱 UI (ego(lite) 토큰, HeroHorizon WebGL 첫 화면)
+public/      데스크톱 UI (ego(lite) 토큰, HalftoneField WebGL 첫 화면)
 desktop/     Electron 실행부, 제한된 IPC, 앱 아이콘
 scripts/     패키징과 아이콘 생성
 tests/       기능·안전·UI 검증

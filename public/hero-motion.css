@@ -7,3 +7,13 @@
 @keyframes naru-sea-drift{from{transform:translate3d(-2%,-1%,0)}to{transform:translate3d(2%,1%,0)}}
 .page-hidden .hero-pattern span{animation-play-state:paused}
 @media (prefers-reduced-motion:reduce){.hero-pattern span{animation:none;transform:none}}
+/* The cached ego(lite) HalftoneField replaces the static fallback when WebGL is available. */
+.hero.live canvas{opacity:1;mix-blend-mode:normal;mask-image:radial-gradient(ellipse 50% 50% at 50% 36%,var(--hero-mask-center) 0%,var(--hero-mask-middle) 60%,#000 100%);-webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 36%,var(--hero-mask-center) 0%,var(--hero-mask-middle) 60%,#000 100%)}
+.hero.live .hero-pattern{display:none}
+:root{--hero-surface:#000;--hero-title:#fff;--hero-title-shadow:0 2px 18px #000;--hero-fine-dot:#ffffffb3;--hero-mask-center:#0009;--hero-mask-middle:#000d}
+:root[data-theme="light"]{--hero-surface:#f5f7fc;--hero-title:#111;--hero-title-shadow:0 2px 18px #fff;--hero-fine-dot:#15225655;--hero-mask-center:#0002;--hero-mask-middle:#000a}
+@media (prefers-color-scheme:light){:root:not([data-theme]){--hero-surface:#f5f7fc;--hero-title:#111;--hero-title-shadow:0 2px 18px #fff;--hero-fine-dot:#15225655;--hero-mask-center:#0002;--hero-mask-middle:#000a}}
+.hero{background:var(--hero-surface)}
+.hero::after{background-image:radial-gradient(circle,var(--hero-fine-dot) var(--dot-radius),transparent calc(var(--dot-radius) + .35px))}
+.hero-title{color:var(--hero-title);text-shadow:var(--hero-title-shadow)}
+.sheet:has(.chat.empty) .top .icon-btn{color:var(--hero-title)}

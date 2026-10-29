@@ -54,7 +54,7 @@ accounts.py: KINDS, SPECS, status(kind), start_login(kind), models(p), test(p), 
 platform, chooseDirectory(), revealPath(path), openPath(path), openExternal(url), setTheme('system'|'light'|'dark'), version(). Every IPC call checks the sender frame against the backend origin. openPath resolves symlinks and opens only document and media types; scripts, apps and other executables are refused. openExternal accepts only http(s) without credentials.
 
 ## Interface
-ego(lite) Style tokens (grey surfaces, black-alpha text, hairline rings, pill controls, navy→blue-5 primary), Mona Sans bundled locally, Korean-first copy, one HeroHorizon WebGL2 scene on the empty chat screen with a CSS fallback and reduced-motion still frame. Status uses badges (실행 중, 확인 필요, 연결됨, 로그인 필요, 설치 필요). No decorative captions, eyebrows or keyboard hints in the layout; shortcuts live in tooltips.
+ego(lite) Style tokens (grey surfaces, black-alpha text, hairline rings, pill controls, navy→blue-5 primary), Mona Sans bundled locally, Korean-first copy, one HalftoneField WebGL2 scene on the empty chat screen with a CSS fallback and reduced-motion still frame. Status uses badges (실행 중, 확인 필요, 연결됨, 로그인 필요, 설치 필요). No decorative captions, eyebrows or keyboard hints in the layout; shortcuts live in tooltips.
 
 Dotted texture tokens and usage rules: [DOT-PATTERN.md](DOT-PATTERN.md).
 

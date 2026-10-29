@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import providers
 import accounts
 
-VERSION='0.2.1'
+VERSION='0.2.2'
 TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings'}
 INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',)}
 ACTIVE=('running','awaiting_approval')
