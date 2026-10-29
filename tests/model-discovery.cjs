@@ -6,7 +6,7 @@ const c={console,URL,JSON,Date,Intl,Number,String,Map,Set,Math,TextDecoder,Error
 c.globalThis=c;c.window=Object.assign(c.window,c);
 let calls=[];c.fetch=async url=>{calls.push(url);if(url.includes('ollama'))return {ok:false,json:async()=>({error:'Ollama 서버를 시작해 주세요 <offline>'})};return {ok:true,json:async()=>({models:['model-a','model-b','model-a']})}};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8'),c);
-const {S,loadProviderModels,modelMenuHTML,approvalHTML,detailHTML}=c.NaruUI;
+const {S,loadProviderModels,modelMenuHTML,approvalHTML,detailHTML,renderDrawer}=c.NaruUI;
 const chat={id:'codex',kind:'codex',name:'ChatGPT'},local={id:'ollama',kind:'ollama',name:'Ollama'};
 S.data={providers:[chat,local],accounts:{codex:{available:true,authenticated:true}}};S.accounts=S.data.accounts;S.providerId='codex';S.model='my-current-model';
 (async()=>{
@@ -35,5 +35,9 @@ S.data={providers:[chat,local],accounts:{codex:{available:true,authenticated:tru
  assert(html.includes('Prior &lt;chat&gt; · 사용자')&&html.includes('found &amp; here'));
  html=detailHTML({name:'todo',args:{},result:{items:[{text:'Finish',status:'completed'},{text:'Next',status:'in_progress'}]}});
  assert(html.includes('☑ Finish')&&html.includes('◐ Next (진행 중)'));
+ S.data.settings={workspace:'/tmp'};S.detail={artifacts:[],runs:[{id:'last',provider_id:'codex',model:'requested-model',actual_model:'served<model>',status:'completed',usage:{}}]};
+ renderDrawer();html=nodes.get('drawer-in').innerHTML;
+ assert(html.includes('요청 모델')&&html.includes('requested-model')&&html.includes('제공자 응답 모델')&&html.includes('served&lt;model&gt;'));
+ S.detail.runs[0].actual_model=null;renderDrawer();assert(!nodes.get('drawer-in').innerHTML.includes('제공자 응답 모델'),'missing metadata is not invented');
  console.log('Model discovery and search approval UI checks passed.');
 })().catch(e=>{console.error(e);process.exitCode=1});

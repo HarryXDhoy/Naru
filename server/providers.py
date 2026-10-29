@@ -316,8 +316,11 @@ def _openai(provider, messages, tools, on_delta, cancel, max_tokens):
         payload["stream_options"] = {"include_usage": True}
     text, parts, usage = [], {}, {}
     finished = False
+    actual_model = None
     for obj in _stream_request(provider, "/chat/completions", payload, cancel):
         _check_event(obj, provider)
+        if isinstance(obj.get("model"), str) and obj["model"]:
+            actual_model = obj["model"][:200]
         if obj.get("usage"):
             usage = _usage(obj["usage"])
         for choice in obj.get("choices", []):
@@ -346,7 +349,7 @@ def _openai(provider, messages, tools, on_delta, cancel, max_tokens):
                 raise ProviderError("모델 응답이 잘렸거나 필터링되었습니다. 출력 한도를 높이거나 요청을 조정하세요.")
     if not finished:
         raise ProviderError("모델 스트림이 완료 신호 없이 종료되었습니다.")
-    return {"content": "".join(text), "tool_calls": [_call(p["name"], p["arguments"], p["id"]) for _, p in sorted(parts.items())], "usage": usage}
+    return {"content": "".join(text), "tool_calls": [_call(p["name"], p["arguments"], p["id"]) for _, p in sorted(parts.items())], "usage": usage, "actual_model": actual_model}
 
 
 def _responses(provider, messages, tools, on_delta, cancel, max_tokens):

@@ -400,7 +400,7 @@ function renderDrawer(){
  const arts=d.artifacts||[],run=latestRun(),u=run?.usage||{},p=providerById(run?.provider_id),t=duration(run);
  const ico=n=>/\.(png|jpe?g|gif|webp|svg)$/i.test(n)?'image':/\.(html?|js|ts|py|css|json|sh)$/i.test(n)?'code':'doc';
  el.innerHTML=`<h3>파일</h3>${arts.length?arts.map(a=>`<button type="button" class="art" data-artifact="${esc(a.id)}" title="${esc(a.path)}"><span class="ico">${icon(ico(a.name))}</span><div><b>${esc(a.name)}</b><small>${size(a.size)}</small></div></button>`).join(''):'<p class="empty-note">이 대화에서 만든 파일이 여기 모여요.</p>'}
- ${run?`<h3>마지막 실행</h3><dl class="facts"><dt>모델</dt><dd title="${esc(run.model||'')}">${esc(run.model||p?.name||'기본 모델')}</dd><dt>상태</dt><dd>${esc(STATUS[run.status]||run.status)}</dd>${t?`<dt>걸린 시간</dt><dd>${t}</dd>`:''}${u.input_tokens?`<dt>입력 토큰</dt><dd>${Number(u.input_tokens).toLocaleString()}</dd>`:''}${u.output_tokens?`<dt>출력 토큰</dt><dd>${Number(u.output_tokens).toLocaleString()}</dd>`:''}</dl>`:''}
+ ${run?`<h3>마지막 실행</h3><dl class="facts"><dt>요청 모델</dt><dd title="${esc(run.model||'')}">${esc(run.model||p?.name||'기본 모델')}</dd>${run.actual_model?`<dt>제공자 응답 모델</dt><dd title="${esc(run.actual_model)}">${esc(run.actual_model)}</dd>`:''}<dt>상태</dt><dd>${esc(STATUS[run.status]||run.status)}</dd>${t?`<dt>걸린 시간</dt><dd>${t}</dd>`:''}${u.input_tokens?`<dt>입력 토큰</dt><dd>${Number(u.input_tokens).toLocaleString()}</dd>`:''}${u.output_tokens?`<dt>출력 토큰</dt><dd>${Number(u.output_tokens).toLocaleString()}</dd>`:''}</dl>`:''}
  <h3>작업 폴더</h3><p class="path">${esc(S.data.settings.workspace)}</p>${window.naruDesktop?.revealPath?`<button type="button" class="btn sm" style="margin:0 6px" data-act="reveal-workspace">${icon('folder')}Finder에서 보기</button>`:''}`;
 }
 
@@ -884,7 +884,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,enableNotifications,notificationHTML,parseSkillFile,importSkill,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,parseSkillFile,importSkill,S};return;}
 setInterval(tick,280);
 boot();
 })();

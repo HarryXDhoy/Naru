@@ -107,6 +107,16 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(out['usage']['total_tokens'],14)
         self.assertEqual(self.server.requests[-1][2]['Authorization'],'Bearer secret-test-key')
 
+    def test_openai_records_requested_and_provider_reported_model(self):
+        self.server.events = [
+            {'model':'served-model','choices':[{'delta':{'content':'OK'},'finish_reason':'stop'}]},
+            '[DONE]',
+        ]
+        result = self.run_complete('openai')
+        self.assertEqual(self.server.requests[-1][1]['model'], 'test-model')
+        self.assertEqual(result['actual_model'], 'served-model')
+        self.assertEqual(result['content'], 'OK')
+
     def test_openai_continuation_preserves_tool_ids(self):
         self.server.events=[{'choices':[{'delta':{'content':'Done'},'finish_reason':'stop'}]},'[DONE]']
         messages=MESSAGES+[{'role':'assistant','content':'','tool_calls':[{'id':'c1','type':'function','function':{'name':'read_file','arguments':'{"path":"a"}'}}],'_native':{'ignored':True}}, {'role':'tool','tool_call_id':'c1','name':'read_file','content':'Hello'}]
