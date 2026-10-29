@@ -10,6 +10,9 @@ const ACCOUNT_NAMES={codex:'ChatGPT',claude_code:'Claude',gemini_cli:'Gemini',co
 const KIND_LABEL={codex:'ChatGPT 계정',claude_code:'Claude 계정',gemini_cli:'Google 계정',copilot_cli:'GitHub 계정',responses:'OpenAI Responses',openai:'OpenAI 호환',anthropic:'Anthropic API',gemini:'Gemini API',ollama:'Ollama'};
 const STATUS={running:'실행 중',awaiting_approval:'승인 대기',completed:'완료',failed:'실패',cancelled:'중지됨',interrupted:'중단됨'};
 const ATTACH_HEAD='\n\n다음은 사용자가 첨부한 참고 자료입니다.\n';
+const IMAGE_TYPES=new Set(['image/png','image/jpeg','image/webp','image/gif']);
+const imageSource=image=>IMAGE_TYPES.has(image?.mime)&&typeof image.data==='string'&&/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)?`data:${image.mime};base64,${image.data}`:'';
+const imageHTML=(images,cls='message-images')=>{const valid=(images||[]).filter(x=>imageSource(x));return valid.length?`<div class="${cls}">${valid.map(x=>`<img src="${imageSource(x)}" alt="${esc(x.name||'첨부 이미지')}">`).join('')}</div>`:'';};
 const TEXT_EXT=/\.(txt|md|markdown|csv|tsv|json|jsonl|py|js|mjs|cjs|ts|tsx|jsx|html?|css|scss|ya?ml|xml|log|sh|zsh|sql|toml|ini|cfg|env\.example|swift|kt|go|rs|java|c|h|cc|cpp|hpp|rb|php|lua|r|tex)$/i;
 
 const I={
@@ -237,7 +240,8 @@ function renderChat(){
 function autosize(){const el=$('input');if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,240)+'px';}
 const queuePending=()=>S.detail?.queue||[];
 const enqueueMode=()=>runActive()||queuePending().length>0;
-const canSend=()=>!S.sending&&!!(($('input')?.value||'').trim()||attachments().length);
+const fileReads={};
+const canSend=()=>!S.sending&&!fileReads[draftKey()]&&!!(($('input')?.value||'').trim()||attachments().length);
 function syncSend(){const b=$('send');if(b)b.disabled=!canSend();}
 function wireComposer(){
  const input=$('input'),form=$('composer');
@@ -248,6 +252,7 @@ function wireComposer(){
  form.addEventListener('dragover',ev=>{if([...ev.dataTransfer.types].includes('Files')){ev.preventDefault();form.classList.add('drag');}});
  form.addEventListener('dragleave',()=>form.classList.remove('drag'));
  form.addEventListener('drop',ev=>{ev.preventDefault();form.classList.remove('drag');addFiles([...ev.dataTransfer.files]);});
+ input.addEventListener('paste',ev=>{const files=[...(ev.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(files.length)addFiles(files);});
 }
 function renderTools(){
  const el=$('tools');if(!el)return;const active=runActive(),sk=selectedSkills();
@@ -260,28 +265,38 @@ function renderTools(){
 }
 function queueHTML(items,paused,active,error){
  if(!items.length)return '';
- return `<section class="message-queue" aria-label="대기 메시지"><div class="queue-head"><strong>대기 메시지 ${items.length}</strong>${paused?'<span>일시정지됨</span>':''}${paused&&!active?'<button type="button" class="btn" data-act="queue-resume">계속</button>':''}</div>${error?`<p class="queue-error" role="alert">${esc(error)}</p>`:''}<ol class="queue-list">${items.map((item,i)=>{const parts=splitAttachments(item.content);return `<li class="queue-item"><span class="queue-number">${i+1}</span><div class="queue-content"><div class="queue-text">${esc(parts.text)}</div>${parts.files.length?`<div class="queue-files">첨부: ${parts.files.map(esc).join(', ')}</div>`:''}</div><div class="queue-actions">${iconBtn('edit','대기 메시지 편집','queue-edit',item.id)}${iconBtn('x','대기 메시지 삭제','queue-remove',item.id)}</div></li>`;}).join('')}</ol></section>`;
+ return `<section class="message-queue" aria-label="대기 메시지"><div class="queue-head"><strong>대기 메시지 ${items.length}</strong>${paused?'<span>일시정지됨</span>':''}${paused&&!active?'<button type="button" class="btn" data-act="queue-resume">계속</button>':''}</div>${error?`<p class="queue-error" role="alert">${esc(error)}</p>`:''}<ol class="queue-list">${items.map((item,i)=>{const parts=splitAttachments(item.content);return `<li class="queue-item"><span class="queue-number">${i+1}</span><div class="queue-content"><div class="queue-text">${esc(parts.text)}</div>${parts.files.length?`<div class="queue-files">첨부: ${parts.files.map(esc).join(', ')}</div>`:''}${imageHTML(item.images,'queue-images')}</div><div class="queue-actions">${iconBtn('edit','대기 메시지 편집','queue-edit',item.id)}${iconBtn('x','대기 메시지 삭제','queue-remove',item.id)}</div></li>`;}).join('')}</ol></section>`;
 }
 function renderQueue(){const el=$('message-queue');if(!el)return;const items=queuePending();el.hidden=!items.length;el.innerHTML=queueHTML(items,!!S.detail?.queue_paused,runActive(),S.detail?.queue_error);}
 function renderChips(){
  const el=$('file-chips');if(!el)return;const files=attachments();el.hidden=!files.length;
- el.innerHTML=files.map((f,i)=>`<span class="file-chip" title="${esc(f.name)}">${icon('doc')}<span>${esc(f.name)}</span><button type="button" data-act="remove-file" data-id="${i}" aria-label="${esc(f.name)} 빼기">${icon('x')}</button></span>`).join('');
+ el.innerHTML=files.map((f,i)=>`<span class="file-chip" title="${esc(f.name)}">${f.mime?`<img src="${imageSource(f)}" alt="">`:icon('doc')}<span>${esc(f.name)}</span><button type="button" data-act="remove-file" data-id="${i}" aria-label="${esc(f.name)} 빼기">${icon('x')}</button></span>`).join('')+(files.some(f=>f.mime)?'<span class="image-note">이미지는 저장되며 이후 대화에서도 모델 제공자에게 전달될 수 있어요.</span>':'');
  syncSend();
 }
 async function addFiles(list){
- const key=draftKey(),current=[...(S.files[key]||[])];
+ const key=draftKey();if(!list.length)return;
+ fileReads[key]=(fileReads[key]||0)+1;syncSend();
  try{
-  if(current.length+list.length>5)throw new Error('파일은 한 번에 5개까지 첨부할 수 있어요.');
+  const added=[];
   for(const file of list){
+   if(file.type?.startsWith('image/')){
+    if(!IMAGE_TYPES.has(file.type))throw new Error(`${file.name}: PNG, JPEG, WebP 또는 GIF 이미지를 사용해 주세요.`);
+    if(!file.size||file.size>4*1024*1024)throw new Error(`${file.name}: 이미지는 비어 있지 않아야 하고 합쳐서 4 MB 이하여야 해요.`);
+    const data=await new Promise((resolve,reject)=>{const reader=new FileReader(),fail=()=>reject(new Error(`${file.name}: 이미지를 읽지 못했어요.`));reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=fail;reader.onabort=fail;reader.readAsDataURL(file);});
+    added.push({name:file.name||'이미지',size:file.size,mime:file.type,data});continue;
+   }
    if(!TEXT_EXT.test(file.name))throw new Error(`${file.name}: 텍스트 파일만 첨부할 수 있어요.`);
    if(file.size>600*1024)throw new Error(`${file.name}: 600 KB 이하 파일만 첨부할 수 있어요.`);
    let text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());}catch{throw new Error(`${file.name}: UTF-8 텍스트가 아니에요.`);}
    if(text.includes('\u0000'))throw new Error(`${file.name}: 텍스트 파일이 아니에요.`);
-   current.push({name:file.name,size:file.size,text});
+   added.push({name:file.name,size:file.size,text});
   }
-  if(current.reduce((n,f)=>n+f.text.length,0)>90000)throw new Error('첨부 내용은 합쳐서 90,000자 이하여야 해요.');
-  S.files[key]=current;renderChips();
- }catch(err){toast(err.message,true);}
+  const current=[...(S.files[key]||[]),...added],images=current.filter(f=>f.mime);
+  if(current.length>5)throw new Error('파일은 한 번에 5개까지 첨부할 수 있어요.');
+  if(images.length>4||images.reduce((n,f)=>n+f.size,0)>4*1024*1024)throw new Error('이미지는 4개까지, 합쳐서 4 MB 이하여야 해요.');
+  if(current.reduce((n,f)=>n+(f.text?.length||0),0)>90000)throw new Error('첨부 내용은 합쳐서 90,000자 이하여야 해요.');
+  S.files[key]=current;if(draftKey()===key)renderChips();
+ }catch(err){toast(err.message,true);}finally{fileReads[key]--;if(!fileReads[key])delete fileReads[key];if(draftKey()===key)syncSend();}
 }
 
 function renderThread(toBottom=false){
@@ -305,7 +320,7 @@ function setEmpty(on){
 }
 function messageHTML(m,isLast){
  S.msgs.set(String(m.id),m.content);
- if(m.role==='user'){const {text,files}=splitAttachments(m.content);return `<div class="u"><div class="bubble">${esc(text.trim())}${files.length?`<span class="att">${files.map(esc).join(', ')}</span>`:''}</div></div>`;}
+ if(m.role==='user'){const {text,files}=splitAttachments(m.content);return `<div class="u"><div class="bubble">${esc(text.trim())}${imageHTML(m.images)}${files.length?`<span class="att">${files.map(esc).join(', ')}</span>`:''}</div></div>`;}
  return `<article class="a ${isLast?'last':''}"><div class="md">${markdown(m.content)}</div><div class="acts">${iconBtn('copy','복사','copy-msg',m.id)}${isLast?iconBtn('retry','다시 답하기','regenerate',m.id):''}${iconBtn('memory','메모리로 저장','save-memory',m.id)}${iconBtn('skill','스킬로 저장','save-skill',m.id)}</div></article>`;
 }
 function buildSteps(events){
@@ -473,7 +488,7 @@ async function enableNotifications(){
 }
 async function send(){
  const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
- if((!text&&!files.length)||S.sending)return;
+ if((!text&&!files.length)||S.sending||fileReads[draftKey()])return;
  const p=provider();
  if(!p){go('models');toast('먼저 모델을 연결하세요.');return;}
  const acct=accountOf(p);
@@ -481,14 +496,14 @@ async function send(){
  if(isAccount(p)&&acct&&acct.available===false){go('models');toast(`${p.name} CLI를 먼저 설치하세요.`,true);return;}
  if(isAccount(p)&&acct&&!acct.authenticated){go('models');toast(`${p.name} 로그인이 필요해요.`,true);return;}
  if(!isAccount(p)&&!S.model&&!p.model){modelMenu();toast('사용할 모델을 고르세요.');return;}
- let content=text;
- if(files.length)content=(text||'첨부한 파일을 검토해 줘.')+ATTACH_HEAD+files.map(f=>`\n--- 첨부: ${f.name} ---\n${f.text}\n--- 첨부 끝 ---`).join('\n');
+ let content=text;const textFiles=files.filter(f=>!f.mime),images=files.filter(f=>f.mime).map(({name,mime,data})=>({name,mime,data}));
+ if(textFiles.length)content=(text||'첨부한 파일을 검토해 줘.')+ATTACH_HEAD+textFiles.map(f=>`\n--- 첨부: ${f.name} ---\n${f.text}\n--- 첨부 끝 ---`).join('\n');
  if(content.length>100000){toast('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.',true);return;}
  const epoch=S.epoch,key=draftKey(),model=S.model,mode=S.mode,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode();S.sending=true;renderTools();
  try{
   let sid=S.sid;
   if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode}});sid=s.id;if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}S.sid=sid;remember(sid);}}
-  await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,provider_id:p.id,model,mode,skill_ids:skillIds}});
+  await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,...(images.length?{images}:{}),provider_id:p.id,model,mode,skill_ids:skillIds}});
   if(S.drafts[key]===rawText)delete S.drafts[key];
   if(S.files[key]===files)delete S.files[key];
   if(key!==sid&&S.drafts[sid]===rawText)delete S.drafts[sid];
@@ -683,9 +698,9 @@ async function submitForm(form,fn){
 }
 function editQueue(id){
  const sid=S.sid,item=queuePending().find(q=>String(q.id)===String(id));if(!sid||!item)return;
- const parts=splitAttachments(item.content),at=String(item.content).indexOf(ATTACH_HEAD),suffix=at<0?'':String(item.content).slice(at);
- openDialog('대기 메시지 편집',`<form class="form" id="queue-edit-form"><div class="field"><label for="queue-edit-text">메시지</label><textarea id="queue-edit-text" rows="6" maxlength="100000">${esc(parts.text)}</textarea>${parts.files.length?`<span class="hint">첨부는 그대로 유지돼요: ${parts.files.map(esc).join(', ')}</span>`:''}</div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`);
- $('queue-edit-form').addEventListener('submit',ev=>{ev.preventDefault();submitForm(ev.currentTarget,async()=>{const text=$('queue-edit-text').value.trim();if(!text&&!suffix)throw new Error('메시지를 입력해 주세요.');const content=text+suffix;if(content.length>100000)throw new Error('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.');await api(`/api/sessions/${enc(sid)}/queue/${enc(id)}`,{method:'PATCH',body:{content}});closeDialog();if(S.sid===sid)await loadDetail();});});
+ const parts=splitAttachments(item.content),at=String(item.content).indexOf(ATTACH_HEAD),suffix=at<0?'':String(item.content).slice(at),files=[...parts.files,...(item.images||[]).map(x=>x.name||'이미지')];
+ openDialog('대기 메시지 편집',`<form class="form" id="queue-edit-form"><div class="field"><label for="queue-edit-text">메시지</label><textarea id="queue-edit-text" rows="6" maxlength="100000">${esc(parts.text)}</textarea>${files.length?`<span class="hint">첨부는 그대로 유지돼요: ${files.map(esc).join(', ')}</span>`:''}</div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`);
+ $('queue-edit-form').addEventListener('submit',ev=>{ev.preventDefault();submitForm(ev.currentTarget,async()=>{const text=$('queue-edit-text').value.trim();if(!text&&!suffix&&!item.images?.length)throw new Error('메시지를 입력해 주세요.');const content=text+suffix;if(content.length>100000)throw new Error('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.');await api(`/api/sessions/${enc(sid)}/queue/${enc(id)}`,{method:'PATCH',body:{content}});closeDialog();if(S.sid===sid)await loadDetail();});});
 }
 const PRESETS={openai:{name:'OpenAI',kind:'responses',base_url:'https://api.openai.com/v1'},anthropic:{name:'Claude API',kind:'anthropic',base_url:'https://api.anthropic.com/v1'},gemini:{name:'Gemini API',kind:'gemini',base_url:'https://generativelanguage.googleapis.com/v1beta'},ollama:{name:'Ollama',kind:'ollama',base_url:'http://127.0.0.1:11434'},lmstudio:{name:'LM Studio',kind:'openai',base_url:'http://127.0.0.1:1234/v1'},openrouter:{name:'OpenRouter',kind:'openai',base_url:'https://openrouter.ai/api/v1'},custom:{name:'',kind:'openai',base_url:''}};
 const PRESET_NAMES=[['openai','OpenAI'],['anthropic','Claude API'],['gemini','Gemini API'],['ollama','Ollama'],['lmstudio','LM Studio'],['openrouter','OpenRouter 키'],['custom','직접 입력']];
@@ -984,7 +999,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,addFiles,wireComposer,renderChips,messageHTML,imageSource,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,S};return;}
 setInterval(tick,280);
 boot();
 })();

@@ -278,6 +278,7 @@ def _system(messages):
 
 def _transcript(messages):
     parts = []
+    image_number = 0
     for m in messages:
         role, content = m.get("role"), m.get("content") or ""
         if role == "system":
@@ -288,7 +289,11 @@ def _transcript(messages):
             calls = [{"id": c.get("id"), "name": c.get("function", {}).get("name"), "arguments": c.get("function", {}).get("arguments")} for c in m["tool_calls"]]
             parts.append("ASSISTANT:\n" + content + "\nREQUESTED TOOLS: " + json.dumps(calls, ensure_ascii=False))
         else:
-            parts.append(str(role).upper() + ":\n" + content)
+            labels = []
+            for image in m.get('images', []):
+                image_number += 1
+                labels.append(f"#{image_number}: {image['name']}")
+            parts.append(str(role).upper() + ":\n" + content + ('\n[첨부 이미지 ' + ', '.join(labels) + ']' if labels else ''))
     return "\n\n".join(parts)
 
 
@@ -355,22 +360,33 @@ def _invoke(provider, messages, on_delta, cancel, plan=False, tools=None, max_to
         prompt = instructions + "\n\nCONVERSATION:\n" + conversation + "\n\nReturn the JSON object now."
     else:
         prompt = "Continue this conversation as the assistant. Reply with your next message only.\n\n" + conversation
+    images = [image for m in messages for image in m.get('images', [])]
+    if kind == 'claude_code' and images:
+        blocks = [{'type':'text','text':prompt}] + [{'type':'image','source':{'type':'base64','media_type':im['mime'],'data':im['data']}} for im in images]
+        prompt = json.dumps({'type':'user','message':{'role':'user','content':blocks},'parent_tool_use_id':None,'session_id':'default'},ensure_ascii=False) + '\n'
     usage, text, result = {}, [], {}
     with tempfile.TemporaryDirectory(prefix="naru-account-") as folder:
         if kind == "claude_code":
             system_file = os.path.join(folder, "system.md")
             Path(system_file).write_text(system or "You are a helpful assistant.", encoding="utf-8")
             if plan:
-                raw = []
-                code, err = _run(_claude_args(binary, system_file, model, ["--output-format", "json", "--json-schema", json.dumps(PLAN_SCHEMA)]), prompt, folder, env, cancel, raw.append)
-                joined = "".join(raw).strip()
-                try:
-                    data = json.loads(joined or "{}")
-                except ValueError:
+                if images:
+                    data = {}
+                    def collect(obj):
+                        if obj.get('type') == 'result':data.update(obj)
+                    extra = ['--input-format','stream-json','--output-format','stream-json','--verbose','--json-schema',json.dumps(PLAN_SCHEMA)]
+                    code, err = _run(_claude_args(binary, system_file, model, extra), prompt, folder, env, cancel, _lines(collect))
+                else:
+                    raw = []
+                    code, err = _run(_claude_args(binary, system_file, model, ["--output-format", "json", "--json-schema", json.dumps(PLAN_SCHEMA)]), prompt, folder, env, cancel, raw.append)
+                    joined = "".join(raw).strip()
                     try:
-                        data = json.loads(joined.splitlines()[-1])
-                    except (ValueError, IndexError):
-                        data = {}
+                        data = json.loads(joined or "{}")
+                    except ValueError:
+                        try:
+                            data = json.loads(joined.splitlines()[-1])
+                        except (ValueError, IndexError):
+                            data = {}
                 if data.get("is_error") or (code and not data):
                     raise AccountError(_explain(kind, data.get("result") or err))
                 usage = _usage(data.get("usage"))
@@ -388,7 +404,9 @@ def _invoke(provider, messages, on_delta, cancel, plan=False, tools=None, max_to
                         text.append(delta["text"]); on_delta(delta["text"])
                 elif kind_ == "result":
                     result.update(obj)
-            code, err = _run(_claude_args(binary, system_file, model, ["--output-format", "stream-json", "--verbose", "--include-partial-messages"]), prompt, folder, env, cancel, _lines(handle))
+            extra = ["--output-format", "stream-json", "--verbose", "--include-partial-messages"]
+            if images:extra += ['--input-format','stream-json']
+            code, err = _run(_claude_args(binary, system_file, model, extra), prompt, folder, env, cancel, _lines(handle))
             if result.get("is_error") or (code and not result):
                 raise AccountError(_explain(kind, result.get("result") or err))
             content = "".join(text) or str(result.get("result") or "")

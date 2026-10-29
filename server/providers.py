@@ -6,7 +6,10 @@ reasoning items, Anthropic blocks, and Gemini thought signatures must round-trip
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import copy
+import contextlib
 import json
 import os
 import queue
@@ -22,6 +25,64 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+
+IMAGE_LIMIT = 4 * 1024 * 1024
+IMAGE_TYPES = {'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp', 'image/gif': '.gif'}
+
+def validate_images(value):
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > 4:
+        raise ValueError('이미지는 최대 4개까지 첨부할 수 있습니다.')
+    result, total = [], 0
+    for image in value:
+        if not isinstance(image, dict) or image.get('mime') not in IMAGE_TYPES or not isinstance(image.get('data'), str):
+            raise ValueError('PNG, JPEG, WebP 또는 GIF 이미지만 첨부할 수 있습니다.')
+        mime, data = image['mime'], image['data']
+        if len(data) > ((IMAGE_LIMIT + 2) // 3) * 4:
+            raise ValueError('이미지 전체 크기는 4MB 이하여야 합니다.')
+        try:
+            raw = base64.b64decode(data, validate=True)
+        except (ValueError, binascii.Error):
+            raise ValueError('이미지 데이터를 읽을 수 없습니다.') from None
+        total += len(raw)
+        if total > IMAGE_LIMIT:
+            raise ValueError('이미지 전체 크기는 4MB 이하여야 합니다.')
+        signatures = {'image/png': raw.startswith(b'\x89PNG\r\n\x1a\n'), 'image/jpeg': raw.startswith(b'\xff\xd8\xff'), 'image/gif': raw.startswith((b'GIF87a', b'GIF89a')), 'image/webp': len(raw) >= 12 and raw[:4] == b'RIFF' and raw[8:12] == b'WEBP'}
+        if not signatures[mime]:
+            raise ValueError('이미지 파일 형식이 내용과 일치하지 않습니다.')
+        name = re.sub(r'[\x00-\x1f\x7f]', ' ', str(image.get('name') or 'image')).replace('\\', '/').split('/')[-1][:200] or 'image'
+        result.append({'name': name, 'mime': mime, 'data': data})
+    return result
+
+@contextlib.contextmanager
+def codex_image_files(messages):
+    """Create private, short-lived files for Codex's image attachment option."""
+    images = [image for m in messages for image in m.get('images', [])]
+    if not images:
+        yield []
+        return
+    with tempfile.TemporaryDirectory(prefix='naru-images-') as folder:
+        paths = []
+        for i, image in enumerate(images):
+            path = Path(folder) / (str(i) + IMAGE_TYPES[image['mime']])
+            path.write_bytes(base64.b64decode(image['data'], validate=True))
+            os.chmod(path, 0o600)
+            paths.append(str(path))
+        yield paths
+
+def codex_text_messages(messages):
+    """Mark each image's position in the flattened Codex attachment list."""
+    result, number = [], 0
+    for m in messages:
+        labels = []
+        for image in m.get('images', []):
+            number += 1
+            labels.append(f"#{number}: {image['name']}")
+        clean = {k:v for k,v in m.items() if not k.startswith('_') and k!='images'}
+        if labels:clean['content'] = (m.get('content') or '') + '\n[첨부 이미지 ' + ', '.join(labels) + ']'
+        result.append(clean)
+    return result
 
 DEFAULT_URLS = {
     "openai": "https://api.openai.com/v1",
@@ -307,6 +368,9 @@ def test_provider(provider):
 
 def _openai(provider, messages, tools, on_delta, cancel, max_tokens):
     clean = [{k: v for k, v in m.items() if k in ("role", "content", "tool_calls", "tool_call_id", "name")} for m in messages]
+    for item, source in zip(clean, messages):
+        if source.get('images'):
+            item['content'] = ([{'type': 'text', 'text': source['content']}] if source.get('content') else []) + [{'type': 'image_url', 'image_url': {'url': f"data:{im['mime']};base64,{im['data']}"}} for im in source['images']]
     payload = {"model": provider["model"], "messages": clean, "stream": True}
     # Chat-completions compatible runtimes generally implement max_tokens.
     payload["max_completion_tokens" if "api.openai.com" == urllib.parse.urlsplit(_base(provider)).hostname else "max_tokens"] = max_tokens
@@ -364,7 +428,10 @@ def _responses(provider, messages, tools, on_delta, cancel, max_tokens):
         elif role == "assistant" and m.get("_native", {}).get("kind") == "responses":
             inputs.extend(copy.deepcopy(m["_native"]["output"]))
         else:
-            if m.get("content"):
+            if m.get('images'):
+                blocks = ([{'type':'input_text','text':m['content']}] if m.get('content') else []) + [{'type':'input_image','image_url':f"data:{im['mime']};base64,{im['data']}"} for im in m['images']]
+                inputs.append({'role':role,'content':blocks})
+            elif m.get("content"):
                 inputs.append({"role": role, "content": m["content"]})
             for tc in m.get("tool_calls", []):
                 inputs.append({"type": "function_call", "call_id": tc["id"], "name": tc["function"]["name"], "arguments": tc["function"]["arguments"]})
@@ -410,6 +477,7 @@ def _anthropic(provider, messages, tools, on_delta, cancel, max_tokens):
             blocks = copy.deepcopy(m["_native"]["content"])
         else:
             blocks = [{"type": "text", "text": m["content"]}] if m.get("content") else []
+            blocks.extend({'type':'image','source':{'type':'base64','media_type':im['mime'],'data':im['data']}} for im in m.get('images', []))
             for tc in m.get("tool_calls", []):
                 blocks.append({"type": "tool_use", "id": tc["id"], "name": tc["function"]["name"], "input": _arguments(tc["function"]["arguments"])})
         if not blocks:
@@ -490,6 +558,7 @@ def _gemini(provider, messages, tools, on_delta, cancel, max_tokens):
         else:
             role = "model" if role == "assistant" else "user"
             parts = [{"text": m["content"]}] if m.get("content") else []
+            parts.extend({'inlineData':{'mimeType':im['mime'],'data':im['data']}} for im in m.get('images', []))
             for tc in m.get("tool_calls", []):
                 parts.append({"functionCall": {"name": tc["function"]["name"], "args": _arguments(tc["function"]["arguments"])}})
         if parts:
@@ -531,6 +600,8 @@ def _ollama(provider, messages, tools, on_delta, cancel, max_tokens):
     converted = []
     for m in messages:
         item = {"role": m["role"], "content": m.get("content", "")}
+        if m.get('images'):
+            item['images'] = [im['data'] for im in m['images']]
         if m.get("tool_calls"):
             item["tool_calls"] = [{"function": {"name": tc["function"]["name"], "arguments": _arguments(tc["function"]["arguments"])}} for tc in m["tool_calls"]]
         if m["role"] == "tool":
@@ -689,7 +760,7 @@ def _kill_group(process):
             pass
 
 
-def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None, _planner=False):
+def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None, _planner=False, images=None):
     binary = _codex_executable()
     if not binary:
         raise ProviderError("Codex CLI가 설치되어 있지 않습니다.")
@@ -712,6 +783,8 @@ def run_codex(prompt, model, workspace, mode, on_event, cancel, *, _schema=None,
         args += ["-c", 'web_search="disabled"', "-c", 'skills.bundled.enabled=false', "-c", 'skills.include_instructions=false', "-c", 'project_doc_max_bytes=0', "-c", 'mcp_servers={}']
     if model and str(model).strip():
         args += ["--model", str(model).strip()]
+    for image in images or []:
+        args += ['--image', image]
     args.append("-")
     env = os.environ.copy()
     for key in ("OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"):
@@ -837,7 +910,7 @@ def _codex_complete(provider, messages, tools, on_delta, cancel, max_tokens):
             "id": {"type": "string"}, "name": {"type": "string"}, "arguments_json": {"type": "string"}
         }, "required": ["id", "name", "arguments_json"], "additionalProperties": False}}
     }, "required": ["content", "tool_calls"], "additionalProperties": False}
-    cleaned = [{k:v for k,v in m.items() if not k.startswith("_")} for m in messages]
+    cleaned = codex_text_messages(messages)
     prompt = ("You are the model planner for Naru, a personal agent app. Your only actions are the host functions listed below. "
               "Never invoke Codex's own tools, filesystem, shell, browser, or external integrations. "
               "Return exactly one JSON object matching the supplied schema. To request host tools, put each request in tool_calls "
@@ -851,7 +924,10 @@ def _codex_complete(provider, messages, tools, on_delta, cancel, max_tokens):
     with tempfile.TemporaryDirectory(prefix="naru-planner-") as folder:
         path = Path(folder) / "response-schema.json"
         path.write_text(json.dumps(schema))
-        result = run_codex(prompt, provider.get("model", ""), folder, "chat", lambda *_: None, cancel, _schema=path, _planner=True)
+        with codex_image_files(messages) as images:
+            kwargs={'_schema':path,'_planner':True}
+            if images:kwargs['images']=images
+            result = run_codex(prompt, provider.get("model", ""), folder, "chat", lambda *_: None, cancel, **kwargs)
     try:
         value = json.loads(result["content"])
     except (ValueError, TypeError):

@@ -178,6 +178,9 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .queue-content{flex:1;min-width:0;padding-top:4px}
 .queue-text{white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 .queue-files{color:var(--text-3);font-size:12px;overflow-wrap:anywhere}
+.queue-images,.message-images{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.queue-images img{width:44px;height:44px;object-fit:cover;border-radius:6px}
+.message-images img{display:block;max-width:min(280px,100%);max-height:240px;object-fit:contain;border-radius:8px}
 .queue-actions{display:flex;flex:none}
 
 /* Composer (ego Composer) */
@@ -214,6 +217,8 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .file-chip{display:inline-flex;align-items:center;gap:var(--space-6);min-height:26px;padding:3px 4px 3px 10px;border-radius:var(--radius-full);background:var(--bg-4);font:500 13px/19px var(--font-sans);max-width:240px}
 .file-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .file-chip svg{width:14px;height:14px;color:var(--text-3)}
+.file-chip img{width:26px;height:26px;object-fit:cover;border-radius:4px}
+.image-note{flex-basis:100%;font-size:12px;line-height:18px;color:var(--text-3)}
 .file-chip button{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:var(--text-3)}
 .file-chip button:hover{background:var(--bg-alpha-4);color:var(--text-1)}
 

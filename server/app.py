@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import providers
 import accounts
 
-VERSION='0.2.9'
+VERSION='0.3.0'
 TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings','queued_messages','workflows'}
 INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',),'queued_messages':('session_id',)}
 ACTIVE=('running','awaiting_approval')
@@ -304,7 +304,10 @@ class Runtime:
         p=self.store.get('providers',id)
         if not p:raise ValueError('연결할 모델 제공자를 선택해 주세요.')
         return dict(p,api_key=self.vault.get(id) if p.get('has_key') else '')
-    def message(self,sid,role,content):return self.store.put('messages',dict(id=uid(),session_id=sid,role=role,content=content,created_at=now()))
+    def message(self,sid,role,content,images=None):
+        msg=dict(id=uid(),session_id=sid,role=role,content=content,created_at=now())
+        if images:msg['images']=images
+        return self.store.put('messages',msg)
     def project_context(self,workspace):
         """Read bounded project guidance only from fixed regular files at the workspace root."""
         root=Path(workspace).expanduser().resolve()
@@ -437,24 +440,25 @@ class Runtime:
                 if regenerate:
                     p=self.provider(body.get('provider_id') or s['provider_id']);model=body.get('model',s.get('model','')) or p.get('model','');mode=body.get('mode',s.get('mode','chat'));skill_ids=body.get('skill_ids',[])
                 else:
-                    content=body.get('content','').strip()
-                    if not content or len(content)>100000:raise ValueError('메시지는 1~100,000자여야 합니다.')
+                    content=body.get('content','').strip();images=providers.validate_images(body.get('images',[]))
+                    if (not content and not images) or len(content)>100000:raise ValueError('메시지 또는 이미지를 첨부해 주세요. 메시지는 100,000자까지 가능합니다.')
                     p=self.provider(body.get('provider_id') or s['provider_id']);model=body.get('model',s.get('model','')) or p.get('model','');mode=body.get('mode',s.get('mode','chat'))
                     skill_ids=body.get('skill_ids',[])
                 if mode not in ('chat','agent'):raise ValueError('올바른 실행 모드를 선택해 주세요.')
                 if p['kind']!='codex' and p['kind'] not in accounts.KINDS and not model:raise ValueError('모델 이름을 입력하거나 목록에서 선택해 주세요.')
                 if not regenerate:
-                    self.message(sid,'user',content)
-                    self.store.patch('sessions',sid,title=content[:42] if s['title']=='새 대화' else s['title'],provider_id=p['id'],model=model,mode=mode,updated_at=now())
+                    self.message(sid,'user',content,images)
+                    self.store.patch('sessions',sid,title=(content[:42] or images[0]['name']) if s['title']=='새 대화' else s['title'],provider_id=p['id'],model=model,mode=mode,updated_at=now())
                 else:self.store.patch('sessions',sid,provider_id=p['id'],model=model,mode=mode,updated_at=now())
                 messages=self.store.where('messages','session_id',sid)
                 if regenerate and messages and messages[-1]['role']=='assistant':
                     replace_message_id=messages[-1]['id'];messages=messages[:-1]
-                history=[{'role':m['role'],'content':m['content']} for m in messages]
-                limited=[];size=0
+                history=[{'role':m['role'],'content':m['content'],**({'images':m['images']} if m.get('images') else {})} for m in messages]
+                limited=[];size=0;image_size=0
                 for m in reversed(history):
-                    if size+len(m['content'])>65000 and limited:break
-                    limited.insert(0,m);size+=len(m['content'])
+                    imgsize=sum(len(im['data']) for im in m.get('images',[]))
+                    if (size+len(m['content'])>65000 or image_size+imgsize>12_000_000) and limited:break
+                    limited.insert(0,m);size+=len(m['content']);image_size+=imgsize
                 settings=dict(queued['settings']) if queued else self.settings()
                 if queued:
                     ranks={'manual':0,'auto_approve':1,'full_access':2};current=self.settings().get('access_mode','manual');original=settings.get('access_mode','manual')
@@ -480,8 +484,8 @@ class Runtime:
             return {'run_id':id}
     def enqueue(self,sid,body):
         with self.lock:
-            session=self.session(sid);content=str(body.get('content','')).strip()
-            if not content or len(content)>100000:raise ValueError('메시지는 1~100,000자여야 합니다.')
+            session=self.session(sid);content=str(body.get('content','')).strip();images=providers.validate_images(body.get('images',[]))
+            if (not content and not images) or len(content)>100000:raise ValueError('메시지 또는 이미지를 첨부해 주세요. 메시지는 100,000자까지 가능합니다.')
             provider_id=body.get('provider_id') or session.get('provider_id')
             p=self.store.get('providers',provider_id)
             if not p:raise ValueError('연결할 모델 제공자를 선택해 주세요.')
@@ -491,7 +495,7 @@ class Runtime:
             skill_ids=body.get('skill_ids',[])
             if not isinstance(skill_ids,list) or len(skill_ids)>100 or not all(isinstance(x,str) and len(x)<=128 for x in skill_ids):raise ValueError('올바른 스킬을 선택해 주세요.')
             if len(self.store.where('queued_messages','session_id',sid))>=100:raise ValueError('대기 메시지는 100개까지 추가할 수 있습니다.')
-            q=dict(id=uid(),session_id=sid,content=content,provider_id=provider_id,model=model,mode=mode,skill_ids=skill_ids,settings=self.settings(),created_at=now())
+            q=dict(id=uid(),session_id=sid,content=content,images=images,provider_id=provider_id,model=model,mode=mode,skill_ids=skill_ids,settings=self.settings(),created_at=now())
             self.store.put('queued_messages',q)
             runs=self.store.where('runs','session_id',sid)
             if sid not in self.active and not any(r['status'] in ACTIVE for r in runs):
@@ -508,7 +512,7 @@ class Runtime:
                 if not self.store.where('queued_messages','session_id',sid):self.store.patch('sessions',sid,queue_paused=False,queue_error='')
                 return {'ok':True}
             content=str((body or {}).get('content','')).strip()
-            if not content or len(content)>100000:raise ValueError('메시지는 1~100,000자여야 합니다.')
+            if (not content and not q.get('images')) or len(content)>100000:raise ValueError('메시지 또는 이미지를 첨부해 주세요. 메시지는 100,000자까지 가능합니다.')
             return {'queued':self.public_queue(self.store.patch('queued_messages',qid,content=content))}
     def dispatch_queue(self,sid,resume=False):
         with self.lock:
@@ -829,16 +833,20 @@ class Runtime:
             p=self.provider(run['provider_id']);p['model']=run['model'];kind=p['kind']
             self.event(id,'status',{'text':'모델에 연결하고 있습니다.','provider':p['name'],'model':run['model'] or '계정 기본 모델'})
             if kind=='codex' and run['mode']=='chat':
-                prompt='\n\n'.join(m['role'].upper()+':\n'+m['content'] for m in ctx)
-                result=providers.run_codex(prompt,run['model'],run['settings']['workspace'],run['mode'],on_event,cancel)
+                prompt='\n\n'.join(m['role'].upper()+':\n'+m['content'] for m in providers.codex_text_messages(ctx))
+                with providers.codex_image_files(ctx) as images:
+                    kwargs={'images':images} if images else {}
+                    result=providers.run_codex(prompt,run['model'],run['settings']['workspace'],run['mode'],on_event,cancel,**kwargs)
                 self.store.patch('runs',id,actual_model=result.get('actual_model') or None)
                 final=result['content'];usage=result.get('usage',{})
                 self.scan_artifacts(run['session_id'],run['settings']['workspace'],started)
             elif kind in accounts.KINDS and (run['mode']=='chat' or not p.get('tools_enabled',True)):
+                if kind!='claude_code' and any(m.get('images') for m in ctx):raise ValueError('이 계정 연결은 아직 이미지 입력을 지원하지 않습니다. 이미지 입력을 지원하는 API 연결이나 ChatGPT를 선택해 주세요.')
                 result=accounts.chat(p,ctx,on_delta,cancel,max_tokens=run['settings']['max_output_tokens'])
                 self.store.patch('runs',id,actual_model=result.get('actual_model') or None)
                 final=result['content'];usage=result.get('usage',{})
             else:
+                if kind in accounts.KINDS and kind!='claude_code' and any(m.get('images') for m in ctx):raise ValueError('이 계정 연결은 아직 이미지 입력을 지원하지 않습니다. 이미지 입력을 지원하는 API 연결이나 ChatGPT를 선택해 주세요.')
                 complete=accounts.complete if kind in accounts.KINDS else providers.complete
                 for step in range(run['settings']['max_steps']):
                     if cancel.is_set():raise InterruptedError('실행이 취소되었습니다.')
@@ -955,7 +963,7 @@ class Handler(BaseHTTPRequestHandler):
         return True
     def body(self):
         n=int(self.headers.get('Content-Length','0'))
-        if n>3_000_000:raise ValueError('요청이 너무 큽니다.')
+        if n>6_000_000:raise ValueError('요청이 너무 큽니다.')
         d=json.loads(self.rfile.read(n) or b'{}')
         if not isinstance(d,dict):raise ValueError('JSON 객체가 필요합니다.')
         return d
