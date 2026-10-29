@@ -41,6 +41,7 @@ POST /api/sessions/:id/queue enqueues a message with its provider, model, mode, 
 
 ## Tools and approvals
 Tools: load_skill, read_skill_file, list_files, read_file, search_files, git_status, git_diff, write_file (overwrite only when asked), edit_file (exact unique old_text, atomic, keeps file mode), run_command, fetch_url, browser_search. browser_read is disabled until browser requests can be isolated from private networks. File tools are restricted to configured workspace or report paths except in full_access mode. Shell commands run as the current OS user without a filesystem sandbox.
+Each session may inherit the default access mode or override it with manual, auto_approve, or full_access. New runs snapshot the session effective access; resumed runs keep their prior snapshot. Queued messages use the more restrictive effective access at enqueue and dispatch.
 Settings access_mode is manual (default), auto_approve (file changes and commands; skill loading, conversation search and Git diff require approval), or full_access (all tools). Access mode is captured for each new run; resumed pending actions require fresh approval.
 Approval {id,run_id,tool,arguments,status,created_at}. POST /api/approvals/:id {decision:'approve'|'approve_all'|'deny'}. approve_all adds the tool to the run's auto_approve list; later calls of that tool in the same run are recorded with data.auto=true.
 

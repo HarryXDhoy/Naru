@@ -192,7 +192,7 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .composer textarea:hover,.composer textarea:focus{box-shadow:none}
 .composer textarea::placeholder{color:var(--text-4)}
 .composer textarea:focus-visible{outline:none}
-.tools{display:flex;align-items:center;gap:var(--space-4);margin-left:-4px}
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-4);margin-left:-4px}
 .tools .grow{flex:1}
 .chip{display:inline-flex;align-items:center;gap:var(--space-4);min-height:26px;padding:3px 8px;border-radius:var(--radius-full);color:var(--text-2);font:500 13px/19px var(--font-sans);transition:background-color .15s var(--ease-standard),color .15s var(--ease-standard);max-width:240px;white-space:nowrap}
 .chip:hover{background:var(--bg-alpha-2);color:var(--text-1)}
@@ -208,7 +208,7 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .seg button:hover{color:var(--text-1)}
 .seg button[aria-pressed="true"]{background:var(--fg-1);color:var(--text-1);box-shadow:var(--shadow-2)}
 .seg button:disabled{opacity:.5}
-.send{position:relative;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--text-0);color:var(--bg-1);transition:transform .1s var(--ease-standard),background-color .15s var(--ease-standard)}
+.send{position:relative;flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--text-0);color:var(--bg-1);transition:transform .1s var(--ease-standard),background-color .15s var(--ease-standard)}
 .send svg{width:16px;height:16px}
 .send:active{transform:scale(.94)}
 .send:disabled{background:var(--bg-5);color:var(--text-4);transform:none}

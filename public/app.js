@@ -112,7 +112,7 @@ function startHero(box){
  box.classList.add('live');size();h.recolor();h.kick();
 }
 const pref={get(k,d){try{const native=window.naruDesktop?.getPreference?.(k);if(native!=null)return native;const v=localStorage.getItem('naru.'+k);if(v!==null)window.naruDesktop?.setPreference?.(k,v);return v===null?d:v;}catch{return d;}},set(k,v){try{v=v==null?null:String(v);if(window.naruDesktop?.setPreference?.(k,v)===false)toast('화면 설정을 저장하지 못했어요. 앱 데이터 폴더 권한을 확인하세요.',true);v===null?localStorage.removeItem('naru.'+k):localStorage.setItem('naru.'+k,v);}catch{}}};
-const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',skillIds:[],drafts:{},files:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
+const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',providerId:'',model:'',mode:'chat',newAccess:'inherit',newAccessRevision:0,accessSaving:false,skillIds:[],drafts:{},files:{},sending:false,drawer:pref.get('drawer','0')==='1',sideHidden:pref.get('side','1')==='0',open:new Set(),steps:new Set(),models:{},modelFetch:{},epoch:0,codes:[],msgs:new Map(),tests:{},watch:null,blobs:[]};
 
 // ---------- utilities ----------
 let toastTimer;
@@ -240,8 +240,11 @@ function renderChat(){
 function autosize(){const el=$('input');if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,240)+'px';}
 const queuePending=()=>S.detail?.queue||[];
 const enqueueMode=()=>runActive()||queuePending().length>0;
+const ACCESS_LABELS={manual:'매번 승인',auto_approve:'자동 승인',full_access:'전체 접근'};
+function sessionAccess(){return S.sid?(S.detail?.session?.access_mode||accessValues[S.sid]||S.data?.sessions?.find(s=>s.id===S.sid)?.access_mode||'inherit'):(S.newAccess||'inherit');}
+function accessLabel(){const mode=sessionAccess(),effective=mode==='inherit'?(S.data?.settings?.access_mode||'manual'):mode;return `${mode==='inherit'?'기본 · ':''}${ACCESS_LABELS[effective]||ACCESS_LABELS.manual}`;}
 const fileReads={};
-const canSend=()=>!S.sending&&!fileReads[draftKey()]&&!!(($('input')?.value||'').trim()||attachments().length);
+const canSend=()=>!S.sending&&!S.accessSaving&&!fileReads[draftKey()]&&!!(($('input')?.value||'').trim()||attachments().length);
 function syncSend(){const b=$('send');if(b)b.disabled=!canSend();}
 function wireComposer(){
  const input=$('input'),form=$('composer');
@@ -260,6 +263,7 @@ function renderTools(){
  <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="dialog" title="모델 바꾸기"${active?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
  <div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${active?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${active?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button></div>
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+'개'}</span>`:''}</button>
+ <button type="button" class="chip access-chip" data-act="session-access" aria-haspopup="dialog" aria-label="이 대화의 도구 승인: ${esc(accessLabel())}" title="이 대화의 도구 승인"${S.sending||S.accessSaving||(S.sid&&!S.detail)?' disabled':''}><span>${esc(accessLabel())}</span>${icon('caret','caret')}</button>
  <span class="grow"></span>
  ${active?`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:''}<button type="submit" class="send" id="send" title="${enqueueMode()?'대기열에 추가':'보내기'}" aria-label="${enqueueMode()?'대기열에 추가':'보내기'}"${canSend()?'':' disabled'}>${icon('up')}</button>`;
 }
@@ -453,11 +457,13 @@ async function selectSession(id){
  catch(err){if(epoch===S.epoch){toast(err.message,true);newChat();}}
 }
 function newChat(){S.epoch++;S.view='chat';S.sid=null;S.detail=null;S.live='';remember(null);closePop();closeSide();renderAll();$('input')?.focus();}
-let lastFull=0;
+let lastFull=0;const accessVersions={},accessValues={};
 async function loadDetail(timeout){
- const sid=S.sid,epoch=S.epoch;if(!sid)return;
+ const sid=S.sid,epoch=S.epoch;if(!sid)return;const accessVersion=accessVersions[sid]||0;
  const d=await api(`/api/sessions/${enc(sid)}`,{timeout});
  if(sid!==S.sid||epoch!==S.epoch)return;
+ if((accessVersions[sid]||0)!==accessVersion&&d.session)d.session.access_mode=accessValues[sid];
+ else if(d.session)accessValues[sid]=d.session.access_mode||'inherit';
  const before=latestRun();lastFull=Date.now();
  S.detail=d;S.live=d.live?.text||'';
  if(providerById(d.session.provider_id)&&!S.sending){S.providerId=d.session.provider_id;S.model=d.session.model||'';S.mode=d.session.mode||S.mode;}
@@ -488,7 +494,7 @@ async function enableNotifications(){
 }
 async function send(){
  const input=$('input'),rawText=input?.value||'';const text=rawText.trim(),files=attachments();
- if((!text&&!files.length)||S.sending||fileReads[draftKey()])return;
+ if((!text&&!files.length)||S.sending||S.accessSaving||fileReads[draftKey()])return;
  const p=provider();
  if(!p){go('models');toast('먼저 모델을 연결하세요.');return;}
  const acct=accountOf(p);
@@ -499,10 +505,10 @@ async function send(){
  let content=text;const textFiles=files.filter(f=>!f.mime),images=files.filter(f=>f.mime).map(({name,mime,data})=>({name,mime,data}));
  if(textFiles.length)content=(text||'첨부한 파일을 검토해 줘.')+ATTACH_HEAD+textFiles.map(f=>`\n--- 첨부: ${f.name} ---\n${f.text}\n--- 첨부 끝 ---`).join('\n');
  if(content.length>100000){toast('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.',true);return;}
- const epoch=S.epoch,key=draftKey(),model=S.model,mode=S.mode,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode();S.sending=true;renderTools();
+ const epoch=S.epoch,key=draftKey(),model=S.model,mode=S.mode,accessMode=sessionAccess(),accessRevision=S.newAccessRevision,skillIds=selectedSkills().map(s=>s.id),queued=!!S.sid&&enqueueMode();S.sending=true;renderTools();
+ let sid=S.sid;
  try{
-  let sid=S.sid;
-  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode}});sid=s.id;if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}S.sid=sid;remember(sid);}}
+  if(!sid){const s=await api('/api/sessions',{method:'POST',body:{title:(text||files[0]?.name||'새 대화').slice(0,40),provider_id:p.id,model,mode,access_mode:accessMode}});sid=s.id;accessValues[sid]=s.access_mode||accessMode;accessVersions[sid]=(accessVersions[sid]||0)+1;if(S.data?.sessions&&!S.data.sessions.some(x=>x.id===sid))S.data.sessions.unshift({...s,access_mode:accessValues[sid]});if(S.newAccessRevision===accessRevision){S.newAccess='inherit';if(S.view==='chat'&&!S.sid)renderTools();}if(S.epoch===epoch){if(S.drafts[key]!==undefined){S.drafts[sid]=S.drafts[key];delete S.drafts[key];}if(S.files[key]!==undefined){S.files[sid]=S.files[key];delete S.files[key];}S.sid=sid;remember(sid);}}
   await api(`/api/sessions/${enc(sid)}/${queued?'queue':'messages'}`,{method:'POST',body:{content,...(images.length?{images}:{}),provider_id:p.id,model,mode,skill_ids:skillIds}});
   if(S.drafts[key]===rawText)delete S.drafts[key];
   if(S.files[key]===files)delete S.files[key];
@@ -512,7 +518,7 @@ async function send(){
   if(!queued)S.data.active={...(S.data.active||{}),[sid]:'running'};
   if(S.epoch===epoch&&S.sid===sid)await loadDetail();
   refreshState().then(()=>renderSide()).catch(()=>{});
- }catch(err){toast(err.message,true);}
+ }catch(err){if(sid&&S.sid===sid&&S.epoch===epoch&&!S.detail)try{await loadDetail();}catch{}if(S.data?.sessions)renderSide();toast(err.message,true);}
  finally{S.sending=false;if(S.view==='chat')renderTools();}
 }
 
@@ -695,6 +701,24 @@ function confirmDialog(title,desc,label,action){
 async function submitForm(form,fn){
  const btn=form.querySelector('[type=submit]');btn&&(btn.disabled=true);
  try{await fn();}catch(err){dialogError(err.message);}finally{if(btn&&btn.isConnected)btn.disabled=false;}
+}
+async function saveSessionAccess(mode,sid,epoch){
+ if(!['inherit','manual','auto_approve','full_access'].includes(mode))throw new Error('올바른 도구 승인 방식을 선택하세요.');
+ if(S.accessSaving)throw new Error('설정을 저장하고 있어요.');
+ if(!sid){if(S.sid||S.epoch!==epoch)throw new Error('대화가 바뀌었어요. 다시 설정해 주세요.');S.newAccess=mode;S.newAccessRevision++;if(S.view==='chat')renderTools();return;}
+ S.accessSaving=true;if(S.view==='chat')renderTools();
+ try{
+  const updated=await api(`/api/sessions/${enc(sid)}`,{method:'PATCH',body:{access_mode:mode}});
+  const saved=updated.access_mode||mode;accessValues[sid]=saved;accessVersions[sid]=(accessVersions[sid]||0)+1;
+  const item=S.data?.sessions?.find(s=>s.id===sid);if(item)item.access_mode=saved;
+  if(S.sid===sid&&S.epoch===epoch&&S.detail?.session)S.detail.session.access_mode=saved;
+ }finally{S.accessSaving=false;if(S.view==='chat')renderTools();}
+}
+function openSessionAccess(){
+ const sid=S.sid,epoch=S.epoch,mode=sessionAccess(),base=ACCESS_LABELS[S.data?.settings?.access_mode]||ACCESS_LABELS.manual;
+ const options=[['inherit',`기본 설정 따르기 (${base})`],['manual','매번 승인'],['auto_approve','자동 승인 (Approve for me)'],['full_access','전체 접근 (Full access)']];
+ const dlg=openDialog('이 대화의 도구 승인',`<form class="form" id="session-access-form"><div class="field"><label for="session-access-select">접근 권한</label><select id="session-access-select" name="access_mode" aria-describedby="session-access-help">${options.map(([value,label])=>`<option value="${value}"${value===mode?' selected':''}>${esc(label)}</option>`).join('')}</select><div class="hint" id="session-access-help"><p><strong>매번 승인:</strong> 파일 변경, 명령, 스킬 불러오기와 대화·Git 검색 전에 승인해요.</p><p><strong>자동 승인:</strong> 파일 변경과 터미널 명령을 자동 승인해요. 스킬 불러오기, 대화·Git 검색은 따로 승인해요.</p><p><strong>전체 접근:</strong> 모든 도구를 자동 승인하고 파일 도구의 폴더 제한을 해제해요.</p><p>자동 승인과 전체 접근의 터미널 명령은 샌드박스 없이 사용자 권한으로 실행되어 선택한 폴더 밖의 파일도 읽거나 변경할 수 있어요.</p><p>새 작업부터 적용돼요. 진행 중이거나 재개하는 작업은 기존 권한을 유지하며, 대기 메시지는 등록할 때와 실행할 때 중 더 제한적인 권한을 사용해요.</p></div></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`);
+ $('session-access-form').addEventListener('submit',ev=>{ev.preventDefault();const value=$('session-access-select').value;submitForm(ev.currentTarget,async()=>{await saveSessionAccess(value,sid,epoch);if(dlg.open)closeDialog();});});
 }
 function editQueue(id){
  const sid=S.sid,item=queuePending().find(q=>String(q.id)===String(id));if(!sid||!item)return;
@@ -889,6 +913,7 @@ const ACT={
  'remove-file':el=>{const key=draftKey();S.files[key]=attachments().filter((_,i)=>i!==+el.dataset.id);renderChips();},
  'model-menu':()=>pop&&pop.anchor===$('model-chip')?closePop():modelMenu(),
  'skills-menu':()=>pop&&pop.anchor===$('skill-chip')?closePop():skillsMenu(),
+ 'session-access':()=>openSessionAccess(),
  'mode':async el=>{S.mode=el.dataset.mode;renderTools();if(S.sid)try{await api(`/api/sessions/${enc(S.sid)}`,{method:'PATCH',body:{mode:S.mode}});}catch(err){toast(err.message,true);}},
  'queue-edit':el=>editQueue(el.dataset.id),
  'queue-remove':async el=>{const sid=S.sid;el.disabled=true;await api(`/api/sessions/${enc(sid)}/queue/${enc(el.dataset.id)}`,{method:'DELETE'});if(S.sid===sid)await loadDetail();},
@@ -999,7 +1024,7 @@ async function boot(){
   $('main').innerHTML=`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
-if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,addFiles,wireComposer,renderChips,messageHTML,imageSource,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,S};return;}
+if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,addFiles,wireComposer,renderChips,messageHTML,imageSource,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,S};return;}
 setInterval(tick,280);
 boot();
 })();
