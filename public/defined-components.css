@@ -67,3 +67,27 @@
   width:6px;height:6px;flex:none;border-radius:50%;background:currentColor;
 }
 @media (max-width:640px) { .design-grid.panel { grid-template-columns:1fr;gap:12px; } }
+
+/* Connection lists keep status and actions close to the model they belong to. */
+.models-page h2{margin:28px 0 10px;font-size:13px;font-weight:600;color:var(--text-2)}
+.models-page .model-list{overflow:hidden;border:1px solid var(--bg-alpha-3);border-radius:12px;background:var(--bg-1);box-shadow:none}
+.models-page .model-row{min-height:72px;padding:15px 18px;gap:14px}
+.models-page .model-row+.model-row{box-shadow:inset 0 1px 0 var(--bg-alpha-3)}
+.models-page .model-icon{width:36px;height:36px;display:grid;place-items:center;flex:none;border-radius:10px;color:var(--text-2);background:var(--bg-alpha-2);box-shadow:inset 0 0 0 1px var(--bg-alpha-3)}
+.models-page .model-icon svg{width:17px;height:17px;stroke-width:1.6}
+.models-page .model-row .name{font-size:14px;font-weight:600;flex-wrap:wrap;gap:10px}
+.models-page .model-row .sub{margin-top:3px;white-space:normal;overflow-wrap:anywhere;color:var(--text-3)}
+.models-page .model-row .bad{color:var(--danger)}
+.models-page .badge{padding:0;background:transparent;font-size:12px;font-weight:500}
+.models-page .badge.done{color:var(--badge-done-fg)}
+.models-page .badge.attention{color:var(--badge-att-fg)}
+.models-page .badge.error{color:var(--badge-err-fg)}
+.models-page .model-row .acts2{gap:6px}
+.models-page .model-row .acts2 .btn{min-height:32px;border-radius:8px;padding:5px 12px;background:var(--bg-alpha-2);box-shadow:inset 0 0 0 1px var(--bg-alpha-3)}
+.models-page .model-row .acts2 .btn:hover{background:var(--bg-alpha-4)}
+.models-page .model-row .acts2 .icon-btn{border-radius:8px}
+@media(max-width:640px){
+ .models-page .model-row{padding:14px;gap:12px;flex-wrap:wrap}
+ .models-page .model-row .txt{min-width:0;flex:1}
+ .models-page .model-row .acts2{width:100%;padding-left:48px;justify-content:flex-start;flex-wrap:wrap}
+}
