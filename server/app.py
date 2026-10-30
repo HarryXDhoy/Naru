@@ -12,7 +12,7 @@ import providers
 import accounts
 import context_refs
 
-VERSION='0.3.12'
+VERSION='0.3.13'
 TABLES={'providers','sessions','messages','runs','events','approvals','artifacts','skills','memories','settings','queued_messages','workflows','steering'}
 INDEXED={'messages':('session_id',),'runs':('session_id',),'events':('run_id',),'approvals':('run_id',),'artifacts':('session_id',),'queued_messages':('session_id',),'steering':('session_id','run_id')}
 ACTIVE=('running','awaiting_approval','awaiting_user')

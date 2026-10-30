@@ -180,7 +180,7 @@ class FeatureTests(unittest.TestCase):
         self.assertEqual(args[args.index('--tools') + 1], '')
         self.assertIn('--strict-mcp-config', args); self.assertIn('--no-session-persistence', args)
         self.assertEqual(args[args.index('--model') + 1], 'sonnet')
-        self.assertNotIn('ANTHROPIC_API_KEY', seen['env'])
+        self.assertEqual(seen['env'].get('ANTHROPIC_API_KEY'), 'sk-test')
         self.assertNotEqual(Path(seen['cwd']).resolve(), (self.root / 'work').resolve())
         self.assertEqual(result, {'content': '안녕', 'usage': {'input_tokens': 3, 'output_tokens': 1}}); self.assertEqual(out, ['안녕'])
 
