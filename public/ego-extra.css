@@ -85,3 +85,19 @@ dialog.window .pv-body{background:var(--bg-1);box-shadow:var(--shadow-1);margin:
 .theme-swatch>span{display:flex;align-items:flex-end;padding:8px 10px;font:600 16px/1 var(--font-sans);letter-spacing:-.02em}
 .theme-swatch i{position:absolute;right:8px;top:8px;width:9px;height:9px;border-radius:50%}
 .set-sub{margin:4px 0 8px;font:500 13px/19px var(--font-sans);color:var(--text-2)}
+/* Keep the composer controls on one row at normal widths: long model and access labels shorten with an ellipsis
+   instead of pushing the access chip onto a second line. */
+.composer .tools .chip span{white-space:nowrap}
+.composer #model-chip{max-width:180px}
+.composer .access-chip{max-width:220px}
+.composer .access-chip span,.composer #model-chip span{min-width:0}
+/* The page area takes focus after navigation so screen readers land on it; it doesn't need a visible ring. */
+#main:focus,#main:focus-visible{outline:none}
+@media (min-width:761px){
+ .composer .tools{flex-wrap:nowrap}
+ .composer .tools>.chip{flex:0 0 auto;min-width:0}
+ .composer .tools>.access-chip{flex-shrink:1}
+ .composer .tools>[data-act="image-mode"]:not(.on) span{display:none}
+ .composer .tools>.icon-btn,.composer .tools>.seg,.composer .tools>.send{flex:none}
+ .composer .tools .followup-hint{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
