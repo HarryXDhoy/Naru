@@ -1,6 +1,7 @@
 /* UI-only translations. Interpolated user content is never translated. */
 (()=>{'use strict';
 const en={
+ "GitHub Copilot CLI에 필요한 Node.js 24 이상을 찾지 못했습니다. Node.js를 설치한 뒤 다시 연결하세요.": "GitHub Copilot CLI needs Node.js 24 or later. Install a compatible Node.js runtime, then reconnect.",
  "첨부 이미지": "Attached image",
  "로컬 서버에 연결할 수 없어요. 앱을 다시 열어 주세요.": "Cannot connect to the local server. Reopen Naru.",
  "서버 응답을 읽지 못했어요 (": "Could not read the server response (",

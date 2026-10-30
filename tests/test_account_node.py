@@ -33,6 +33,11 @@ class CopilotNodeTests(unittest.TestCase):
         self.patch_dirs = patch.object(accounts, 'NODE_BIN_DIRS', (str(self.current),))
         self.patch_dirs.start()
         self.addCleanup(self.patch_dirs.stop)
+        probe = accounts._node_major
+        self.patch_probe = patch.object(accounts, '_node_major', side_effect=lambda binary, stamp:
+            probe(binary, stamp) if Path(binary).parent in (self.old, self.current) else 0)
+        self.patch_probe.start()
+        self.addCleanup(self.patch_probe.stop)
 
     def test_old_cli_install_does_not_pin_node_version(self):
         env = accounts._env(str(self.cli), 'copilot_cli')
