@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import codecs
 import glob
+from functools import lru_cache
 import json
 import os
 import queue
@@ -55,7 +56,7 @@ SPECS = {
     },
 }
 KINDS = tuple(SPECS)
-NODE_BIN_DIRS = ("~/.nvm/versions/node/*/bin", "~/.volta/bin", "~/.npm-global/bin", "~/.bun/bin", "~/Library/pnpm", "~/.local/share/pnpm")
+NODE_BIN_DIRS = ("~/.nvm/versions/node/*/bin", "~/.volta/bin", "~/.npm-global/bin", "~/.bun/bin", "~/Library/pnpm", "~/.local/share/pnpm", "/opt/homebrew/opt/node*/bin", "/usr/local/opt/node*/bin")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07")
 PLAN_SCHEMA = {"type": "object", "properties": {
     "content": {"type": "string"},
@@ -74,6 +75,16 @@ def executable(kind):
     return next((str(p) for p in candidates if p and Path(p).is_file() and os.access(p, os.X_OK)), None)
 
 
+@lru_cache(maxsize=64)
+def _node_major(binary, modified):
+    try:
+        result = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=3, stdin=subprocess.DEVNULL)
+        version = re.fullmatch(r"v(\d+)\.\d+\.\d+", result.stdout.strip())
+        return int(version[1]) if result.returncode == 0 and version else 0
+    except (OSError, subprocess.TimeoutExpired):
+        return 0
+
+
 def _env(binary, kind):
     env = os.environ.copy()
     # Claude API 키 연결을 위해 ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN 등은 그대로 유지합니다.
@@ -81,6 +92,17 @@ def _env(binary, kind):
     for extra in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"):
         if extra not in folders:
             folders.append(extra)
+    if kind == "copilot_cli":
+        # A CLI installed under an older nvm version must not force that Node runtime.
+        candidates = folders + [p for pattern in NODE_BIN_DIRS for p in sorted(glob.glob(os.path.expanduser(pattern)), reverse=True)]
+        for folder in dict.fromkeys(candidates):
+            node = Path(folder) / "node"
+            try:
+                if _node_major(str(node), node.stat().st_mtime_ns) >= 24:
+                    folders.insert(0, folder)
+                    break
+            except OSError:
+                continue
     env["PATH"] = os.pathsep.join(dict.fromkeys(folders))
     env["NO_COLOR"] = "1"
     return env
@@ -139,14 +161,15 @@ COPILOT_ISOLATION = ["--available-tools=naru_no_tools", "--disable-builtin-mcps"
 _HELP_CACHE = {}
 
 
-def _help_text(binary):
+def _help_text(binary, kind):
+    env = _env(binary, kind)
     try:
-        key = (binary, os.stat(binary).st_mtime)
+        key = (binary, os.stat(binary).st_mtime, env["PATH"])
     except OSError:
         return ""
     if key not in _HELP_CACHE:
         try:
-            out = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+            out = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL, env=env)
             _HELP_CACHE[key] = (out.stdout or "") + (out.stderr or "")
         except (OSError, subprocess.TimeoutExpired):
             _HELP_CACHE[key] = ""
@@ -160,10 +183,13 @@ def _isolation_problem(kind, binary=None):
         for folder in GEMINI_SYSTEM_POLICY_DIRS:
             if glob.glob(os.path.join(folder, "*.toml")):
                 return "이 Mac에 Gemini CLI 관리자 정책이 있어 Naru가 CLI 도구를 끌 수 없습니다. Gemini API 키 연결을 사용하세요."
-        if binary and "--admin-policy" not in _help_text(binary):
+        if binary and "--admin-policy" not in _help_text(binary, kind):
             return "설치된 Gemini CLI가 오래되어 도구를 끌 수 없습니다. npm install -g @google/gemini-cli 로 업데이트하세요."
     if kind == "copilot_cli" and binary:
-        if "--available-tools" not in _help_text(binary) or "--disable-builtin-mcps" not in _help_text(binary):
+        help_text = _help_text(binary, kind)
+        if "requires Node.js" in help_text:
+            return "GitHub Copilot CLI에 필요한 Node.js 24 이상을 찾지 못했습니다. Node.js를 설치한 뒤 다시 연결하세요."
+        if "--available-tools" not in help_text or "--disable-builtin-mcps" not in help_text:
             return "설치된 GitHub Copilot CLI가 오래되어 도구를 끌 수 없습니다. npm install -g @github/copilot 으로 업데이트하세요."
     return None
 
@@ -194,7 +220,7 @@ def start_login(kind):
     command = " ".join(shlex.quote(part) for part in [binary] + spec["login"])
     script.write_text("\n".join([
         "#!/bin/zsh",
-        "export PATH=" + shlex.quote(str(Path(binary).parent)) + ':"$PATH"',
+        "export PATH=" + shlex.quote(_env(binary, kind)["PATH"]),
         "clear",
         "echo " + shlex.quote(spec["name"] + " 로그인"),
         "echo " + shlex.quote(spec["hint"]),
