@@ -1,6 +1,9 @@
 /* UI-only translations. Interpolated user content is never translated. */
 (()=>{'use strict';
 const en={
+ "Antigravity CLI를 업데이트한 뒤 다시 연결하세요.": "Update Antigravity CLI, then reconnect.",
+ "Antigravity 연결됨": "Antigravity connected",
+ "Antigravity 로그인이 필요합니다.": "Sign in to Antigravity.",
  "개인 Google 계정의 CLI 로그인이 종료됐어요. API 키로 연결하세요.": "Personal Google account sign-in for Gemini CLI has ended. Connect with an API key.",
  "Gemini API 연결": "Connect Gemini API",
  "기업 계정 로그인": "Organization sign-in",

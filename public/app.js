@@ -8,9 +8,9 @@ const enc=encodeURIComponent;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl=v=>{try{const u=new URL(v);return ['https:','http:','mailto:'].includes(u.protocol)?u.href:'';}catch{return '';}};
 const ACTIVE=['running','awaiting_approval','awaiting_user'];
-const ACCOUNT_KINDS=['codex','claude_code','gemini_cli','copilot_cli'];
-const ACCOUNT_NAMES={codex:'ChatGPT',claude_code:'Claude',gemini_cli:'Gemini',copilot_cli:'GitHub Copilot',openrouter:'OpenRouter'};
-const KIND_LABEL=localeLabels(()=>({codex:tr('ChatGPT 계정'),claude_code:tr('Claude 계정'),gemini_cli:tr('Google 계정'),copilot_cli:tr('GitHub 계정'),responses:'OpenAI Responses',openai:tr('OpenAI 호환'),anthropic:'Anthropic API',gemini:'Gemini API',ollama:'Ollama'}));
+const ACCOUNT_KINDS=['codex','claude_code','gemini_cli','copilot_cli','antigravity'];
+const ACCOUNT_NAMES={codex:'ChatGPT',claude_code:'Claude',gemini_cli:'Gemini',copilot_cli:'GitHub Copilot',antigravity:'Antigravity',openrouter:'OpenRouter'};
+const KIND_LABEL=localeLabels(()=>({codex:tr('ChatGPT 계정'),claude_code:tr('Claude 계정'),gemini_cli:tr('Google 계정'),copilot_cli:tr('GitHub 계정'),antigravity:tr('Google 계정'),responses:'OpenAI Responses',openai:tr('OpenAI 호환'),anthropic:'Anthropic API',gemini:'Gemini API',ollama:'Ollama'}));
 const STATUS=localeLabels(()=>({running:tr('실행 중'),awaiting_approval:tr('승인 대기'),awaiting_user:tr('답변 대기'),completed:tr('완료'),failed:tr('실패'),cancelled:tr('중지됨'),interrupted:tr('중단됨')}));
 const ATTACH_HEAD='\n\n다음은 사용자가 첨부한 참고 자료입니다.\n';
 const IMAGE_TYPES=new Set(['image/png','image/jpeg','image/webp','image/gif']);
@@ -779,9 +779,9 @@ function modelMenuHTML(query=''){
   for(const m of models){const on=String(p.id)===String(S.providerId)&&(S.model||'')===(m||'');parts.push(`<button type="button" class="opt" role="menuitemradio" aria-checked="${on}" data-pick="m" data-p="${esc(p.id)}" data-m="${esc(m)}"><span>${esc(m||tr('기본 모델'))}</span>${on?icon('check','tick'):''}</button>`);}
   if(state.loading)parts.push(tr('<div class="loading"><span class="spinner"></span>모델 불러오는 중</div>'));
   else if(state.error)parts.push(`<div class="loading">${esc(state.error)}</div>`);
-  else if(S.models[p.id]&&!S.models[p.id].length&&p.kind!=='codex')parts.push(`<div class="loading">${['claude_code','gemini_cli','copilot_cli'].includes(p.kind)?tr('자동 모델 목록을 제공하지 않아요. 모델 ID를 직접 입력하세요.'):tr('사용 가능한 모델이 없어요')}</div>`);
+  else if(S.models[p.id]&&!S.models[p.id].length&&p.kind!=='codex')parts.push(`<div class="loading">${['claude_code','gemini_cli','copilot_cli','antigravity'].includes(p.kind)?tr('자동 모델 목록을 제공하지 않아요. 모델 ID를 직접 입력하세요.'):tr('사용 가능한 모델이 없어요')}</div>`);
   if(p.kind==='codex')parts.push(tr('<div class="loading">모델 목록은 카탈로그이며 계정 사용 가능 여부는 실행 시 확인됩니다.</div>'));
-  if(['claude_code','gemini_cli','copilot_cli'].includes(p.kind))parts.push(tr('<div class="loading">CLI 기본 모델 목록입니다. 실제 사용 가능 여부는 실행 시 확인됩니다.</div>'));
+  if(['claude_code','gemini_cli','copilot_cli','antigravity'].includes(p.kind))parts.push(tr('<div class="loading">CLI 기본 모델 목록입니다. 실제 사용 가능 여부는 실행 시 확인됩니다.</div>'));
   parts.push(tr`<button type="button" class="opt dim" data-pick="refresh-models" data-p="${esc(p.id)}">${icon('retry')}<span>모델 목록 새로고침</span></button>`);
   parts.push(tr`<div class="inline" hidden data-custom="${esc(p.id)}"><input type="text" placeholder="모델 ID" aria-label="${esc(p.name)} 모델 ID"><button type="button" class="btn sm primary" data-pick="custom" data-p="${esc(p.id)}">사용</button></div><button type="button" class="opt dim" data-pick="custom-open" data-p="${esc(p.id)}">${icon('plus')}<span>모델 ID 입력</span></button>`);
  }
@@ -1078,7 +1078,7 @@ async function openArtifact(id){
 function page(title,body,action=''){return `<div class="page" id="page"><div class="page-in"><div class="page-head"><h1>${esc(title)}</h1>${action}</div>${body}</div></div>`;}
 function renderModels(){
  const a=S.accounts||S.data.accounts;
- const rows=[['codex','ChatGPT'],['claude_code','Claude'],['gemini_cli','Gemini'],['copilot_cli','GitHub Copilot'],['openrouter','OpenRouter']];
+ const rows=[['codex','ChatGPT'],['claude_code','Claude'],['antigravity','Antigravity'],['gemini_cli','Gemini'],['copilot_cli','GitHub Copilot'],['openrouter','OpenRouter']];
  const acct=([key,name])=>{
   const st=a?.[key];let badge='',sub='',act='';
   if(!st)badge=tr('<span class="spinner" role="img" aria-label="확인하는 중"></span>');

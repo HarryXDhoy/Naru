@@ -33,6 +33,13 @@ class AccountError(RuntimeError):
 
 
 SPECS = {
+    "antigravity": {
+        "name": "Antigravity", "bin": "agy", "env": "NARU_ANTIGRAVITY_BIN",
+        "paths": ["~/.local/bin/agy", "/opt/homebrew/bin/agy", "/usr/local/bin/agy"],
+        "install": "curl -fsSL https://antigravity.google/cli/install.sh | bash", "login": [],
+        "models": [],
+        "hint": "브라우저에서 Google 로그인을 마친 뒤 /quit 을 입력하세요.",
+    },
     "claude_code": {
         "name": "Claude", "bin": "claude", "env": "NARU_CLAUDE_BIN",
         "paths": ["~/.local/bin/claude", "~/.claude/local/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"],
@@ -109,6 +116,14 @@ def _env(binary, kind):
 
 
 def models(provider):
+    if provider["kind"] == "antigravity":
+        binary = executable("antigravity")
+        if not binary:
+            return []
+        out = subprocess.run([binary, "models"], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL, env=_env(binary, "antigravity"))
+        if out.returncode:
+            raise AccountError(_explain("antigravity", out.stderr or out.stdout))
+        return [line.split("\t")[0] for line in out.stdout.splitlines() if re.fullmatch(r"[a-zA-Z0-9_.-]+\t.+", line)]
     return list(SPECS[provider["kind"]]["models"])
 
 
@@ -118,6 +133,11 @@ def _account_status(kind):
     if not binary:
         return {"available": False, "authenticated": False, "message": f"{spec['name']} CLI가 없습니다. 설치한 뒤 로그인하세요."}
     try:
+        if kind == "antigravity":
+            out = subprocess.run([binary, "-p", "/usage", "--output-format", "json"], capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL, env=_env(binary, kind))
+            data = json.loads(out.stdout or "{}")
+            signed = out.returncode == 0 and data.get("status") == "SUCCESS" and bool(data.get("command", {}).get("data", {}).get("groups"))
+            return {"available": True, "authenticated": signed, "message": "Antigravity 연결됨" if signed else "Antigravity 로그인이 필요합니다."}
         if kind == "claude_code":
             result = subprocess.run([binary, "auth", "status"], capture_output=True, text=True, timeout=20, env=_env(binary, kind), stdin=subprocess.DEVNULL)
             if result.returncode == 0:
@@ -143,7 +163,7 @@ def _account_status(kind):
                 if gh:
                     signed = subprocess.run([gh, "auth", "status"], capture_output=True, timeout=15, stdin=subprocess.DEVNULL).returncode == 0
             return {"available": True, "authenticated": signed, "message": "GitHub 계정으로 로그인되어 있습니다." if signed else "GitHub 로그인이 필요합니다."}
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, AccountError, ValueError):
         return {"available": True, "authenticated": False, "message": f"{spec['name']} 로그인 상태를 확인하지 못했습니다."}
     return {"available": False, "authenticated": False, "message": ""}
 
@@ -178,6 +198,10 @@ def _help_text(binary, kind):
 
 def _isolation_problem(kind, binary=None):
     """Why this CLI cannot be run with its tools switched off, or None when it can."""
+    if kind == "antigravity" and binary:
+        help_text = _help_text(binary, kind)
+        if not all(flag in help_text for flag in ("--settings", "--disable-slash-commands", "--output-format")):
+            return "Antigravity CLI를 업데이트한 뒤 다시 연결하세요."
     if kind == "gemini_cli":
         # A system-wide admin policy makes Gemini ignore the --admin-policy file Naru supplies.
         for folder in GEMINI_SYSTEM_POLICY_DIRS:
@@ -429,6 +453,31 @@ def _invoke(provider, messages, on_delta, cancel, plan=False, tools=None, max_to
         prompt = json.dumps({'type':'user','message':{'role':'user','content':blocks},'parent_tool_use_id':None,'session_id':'default'},ensure_ascii=False) + '\n'
     usage, text, result = {}, [], {}
     with tempfile.TemporaryDirectory(prefix="naru-account-") as folder:
+        if kind == "antigravity":
+            # A separate config root prevents loading user hooks, plugins and MCP servers.
+            env = dict(env, ANTIGRAVITY_GEMINI_DIR=os.path.join(folder, ".gemini"))
+            settings = {"toolPermission": "strict", "permissions": {"deny": [
+                "read_file(*)", "write_file(*)", "command(*)", "mcp(*)", "read_url(*)", "execute_url(*)"]}}
+            full = ("SYSTEM INSTRUCTIONS:\n" + system + "\n\n" if system else "") + prompt
+            args = [binary, "-p", full, "--output-format", "json", "--disable-slash-commands",
+                    "--settings", json.dumps(settings), "--print-timeout", "180s"]
+            if model:
+                args += ["--model", model]
+            if plan:
+                args += ["--json-schema", json.dumps(PLAN_SCHEMA)]
+            raw = []
+            code, err = _run(args, "", folder, env, cancel, raw.append)
+            try:
+                data = json.loads("".join(raw))
+            except ValueError:
+                raise AccountError(_explain(kind, err or "응답 형식이 올바르지 않습니다.")) from None
+            if code or data.get("status") != "SUCCESS":
+                raise AccountError(_explain(kind, data.get("error") or err))
+            if plan:
+                return {"plan": data.get("structured_output") or _extract_json(data.get("response", "")), "usage": _usage(data.get("usage"))}
+            content = data.get("response", "")
+            on_delta(content)
+            return {"content": content, "usage": _usage(data.get("usage"))}
         if kind == "claude_code":
             system_file = os.path.join(folder, "system.md")
             Path(system_file).write_text(system or "You are a helpful assistant.", encoding="utf-8")
