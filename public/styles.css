@@ -104,7 +104,7 @@ svg{display:block;flex:none}
 
 /* ---------- sidebar (ego Sidebar) ---------- */
 .side-top{display:flex;align-items:center;gap:6px;padding:6px 2px 12px 10px;min-height:44px}
-.wordmark{color:var(--text-1);height:17px;width:auto}
+.wordmark{color:var(--text-1);height:21px;width:auto}
 .side-top .grow{flex:1}
 .icon-btn{width:28px;height:28px;border-radius:var(--radius-full);display:grid;place-items:center;color:var(--text-3);transition:background-color .15s var(--ease-standard),color .15s var(--ease-standard);position:relative}
 .icon-btn:hover{background:var(--bg-alpha-2);color:var(--text-1)}
