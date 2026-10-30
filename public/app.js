@@ -58,13 +58,19 @@ const I={
  key:'<circle cx="8.5" cy="15.5" r="4"/><path d="m11.5 12.5 8-8M16.5 7.5l2.5 2.5"/>',
  plus:'<path d="M12 5v14M5 12h14"/>',
 };
-const icon=(n,cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]||I.bolt}</svg>`;
+// Two separate settings: the theme (Naru's own, or a named design system) and light/dark (system, light, dark).
+const STYLES=['defined','cursor','vercel','raycast'],MODES=['system','light','dark'],NATIVE_MODE={defined:'dark',cursor:'light',vercel:'light',raycast:'dark'};
+function themePrefs(){let t=pref.get('theme','dark'),s=pref.get('style','naru');if(STYLES.includes(t)){s=t;t=NATIVE_MODE[t];pref.set('style',s);pref.set('theme',t);}if(!MODES.includes(t))t='system';if(!STYLES.includes(s))s='naru';return {mode:t,style:s};}
+// Each named theme carries its own icon set (public/icon-sets.js); System/Light/Dark keep Naru's own icons.
+const ICON_SET={defined:'phosphor-light',cursor:'phosphor-regular',vercel:'lucide',raycast:'phosphor-bold'};
+const iconSet=()=>window.NaruIcons?.[ICON_SET[document.documentElement?.dataset?.style]];
+const icon=(n,cls='')=>{const set=iconSet(),p=set?.icons?.[n];if(p)return `<svg class="${cls}" viewBox="${set.viewBox}" width="16" height="16" ${set.attrs} aria-hidden="true">${p}</svg>`;return `<svg class="${cls}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]||I.bolt}</svg>`;};
 const iconBtn=(n,label,act,id,extra='')=>`<button type="button" class="icon-btn" data-act="${act}"${id!==undefined?` data-id="${esc(id)}"`:''} title="${esc(label)}" aria-label="${esc(label)}" ${extra}>${icon(n)}</button>`;
 const WORDMARK='<svg class="wordmark" viewBox="0 10.4 75.6 20.4" fill="none" stroke="currentColor" stroke-width="5.2" role="img" aria-label="naru"><path d="M2.6 30V12.2M2.6 21.4a7.2 7.2 0 0 1 14.4 0V30"/><circle cx="30.4" cy="21.1" r="6.3"/><path d="M36.7 12.2V30"/><path d="M45.2 30V12.2M45.2 21.4a7 7 0 0 1 7-7"/><path d="M58.4 12.2v8.4a7.2 7.2 0 0 0 14.4 0V12.2M72.8 12.2V30"/></svg>';
 // HalftoneField shader from the user’s ego(lite) design-system bundle.
 const HERO_VERT='#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
 const HERO_FRAG= '#version 300 es\nprecision highp float;out vec4 o;uniform vec2 res;uniform float time;uniform vec2 mouse;uniform float lens,cell;' +
-    'uniform vec3 c0,c1,c2,c3,c4;uniform float lightTheme;' +
+    'uniform vec3 c0,c1,c2,c3,c4,paperTone;uniform float lightTheme;' +
     'float hs(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}' +
     'float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hs(i),hs(i+vec2(1,0)),f.x),mix(hs(i+vec2(0,1)),hs(i+1.),f.x),f.y);}' +
     'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n2(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}' +
@@ -77,8 +83,9 @@ const HERO_FRAG= '#version 300 es\nprecision highp float;out vec4 o;uniform vec2
     'float r=cell*.5*clamp(sqrt(lum)*1.15,0.,1.);float d=length(fc-cc);float dotm=1.-smoothstep(r-1.,r,d);' +
     'vec3 ht=cs*1.15*dotm;' +
     'float ld=length(fc-m)/res.y;float L=lens*(1.-smoothstep(.14,.24,ld));' +
-    'vec3 col=ht;if(L>.002)col=mix(ht,fluid(uv),L);vec3 paper=mix(vec3(.96,.97,.99),cs*.58,dotm);if(L>.002)paper=mix(paper,fluid(uv)*.58,L);o=vec4(mix(col,paper,lightTheme),1.);}';
+    'vec3 col=ht;if(L>.002)col=mix(ht,fluid(uv),L);vec3 paper=mix(paperTone,cs*.58,dotm);if(L>.002)paper=mix(paper,fluid(uv)*.58,L);o=vec4(mix(col,paper,lightTheme),1.);}';
 
+const definedTheme=()=>document.documentElement?.dataset?.style==='defined';
 let hero=null;
 function heroColor(name,fallback){const v=getComputedStyle(document.documentElement).getPropertyValue(name).trim();const m=(v||fallback).match(/^#([0-9a-f]{6})/i);if(!m)return [1,1,1];const n=parseInt(m[1],16);return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255];}
 function stopHero(){if(!hero)return;cancelAnimationFrame(hero.raf);hero.io?.disconnect();hero.ro?.disconnect();hero.mq?.removeEventListener?.('change',hero.recolor);hero.reduce?.removeEventListener?.('change',hero.motionChange);hero.box.removeEventListener('pointermove',hero.pointerMove);hero.box.removeEventListener('pointerleave',hero.pointerLeave);hero.canvas.removeEventListener('webglcontextlost',hero.contextLost);document.removeEventListener('visibilitychange',hero.visibilityChange);window.removeEventListener('resize',hero.resize);try{hero.gl.getExtension('WEBGL_lose_context')?.loseContext();}catch{}hero=null;}
@@ -94,12 +101,12 @@ function startHero(box){
  gl.useProgram(prog);
  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
  const loc=gl.getAttribLocation(prog,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
- const uniforms={};for(const name of ['c0','c1','c2','c3','c4','res','time','mouse','lens','cell','lightTheme'])uniforms[name]=gl.getUniformLocation(prog,name);
+ const uniforms={};for(const name of ['c0','c1','c2','c3','c4','paperTone','res','time','mouse','lens','cell','lightTheme'])uniforms[name]=gl.getUniformLocation(prog,name);
  const U=n=>uniforms[n];
  box.appendChild(canvas);
  const reduce=matchMedia('(prefers-reduced-motion: reduce)');
  const h={box,canvas,gl,reduce,raf:0,visible:true,mouse:[.5,.5],target:[.5,.5],lens:0,targetLens:0,t0:performance.now()};hero=h;
- h.recolor=()=>{for(const [i,name,fallback] of [[0,'--fluid-ultramarine','#1f3dff'],[1,'--fluid-cyan','#29c8ff'],[2,'--fluid-lime','#b8f53a'],[3,'--fluid-amber','#ffa41f'],[4,'--fluid-magenta','#ff3fd2']])gl.uniform3fv(U('c'+i),heroColor(name,fallback));gl.uniform1f(U('lightTheme'),getComputedStyle(document.documentElement).colorScheme==='light'?1:0);draw(performance.now());};
+ h.recolor=()=>{for(const [i,name,fallback] of [[0,'--fluid-ultramarine','#1f3dff'],[1,'--fluid-cyan','#29c8ff'],[2,'--fluid-lime','#b8f53a'],[3,'--fluid-amber','#ffa41f'],[4,'--fluid-magenta','#ff3fd2']])gl.uniform3fv(U('c'+i),heroColor(name,fallback));gl.uniform3fv(U('paperTone'),heroColor('--hero-paper','#f5f7fc'));gl.uniform1f(U('lightTheme'),getComputedStyle(document.documentElement).colorScheme==='light'?1:0);draw(performance.now());};
  const size=()=>{const dpr=Math.min(2,devicePixelRatio||1),w=Math.max(1,Math.round(canvas.clientWidth*dpr)),ht=Math.max(1,Math.round(canvas.clientHeight*dpr));if(canvas.width!==w||canvas.height!==ht){canvas.width=w;canvas.height=ht;gl.viewport(0,0,w,ht);}gl.uniform2f(U('res'),w,ht);gl.uniform1f(U('cell'),9*dpr);};
  function draw(now){if(hero!==h)return;if(reduce.matches){h.mouse[0]=.5;h.mouse[1]=.5;h.lens=0;}else{h.mouse[0]+=(h.target[0]-h.mouse[0])*.12;h.mouse[1]+=(h.target[1]-h.mouse[1])*.12;h.lens+=(h.targetLens-h.lens)*.08;}gl.uniform1f(U('time'),reduce.matches?8:8+(now-h.t0)/1000);gl.uniform2f(U('mouse'),h.mouse[0],h.mouse[1]);gl.uniform1f(U('lens'),h.lens);gl.drawArrays(gl.TRIANGLES,0,3);}
  const loop=now=>{if(hero!==h)return;draw(now);if(h.visible&&!reduce.matches&&document.visibilityState!=='hidden')h.raf=requestAnimationFrame(loop);else h.raf=0;};
@@ -121,7 +128,7 @@ const S={data:null,accounts:null,view:'chat',sid:null,detail:null,live:'',provid
 
 // ---------- utilities ----------
 let toastTimer;
-function toast(msg,bad=false){msg=tr(msg);const t=$('toast');if(!t)return;t.textContent=msg;t.classList.toggle('bad',bad);t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),bad?6500:3200);}
+function toast(msg,bad=false,action=null){msg=tr(msg);const t=$('toast');if(!t)return;t.textContent=msg;if(action&&t.appendChild&&document.createElement){const b=document.createElement('button');b.type='button';b.className='act';b.textContent=tr(action.label);b.addEventListener('click',()=>{t.classList.remove('show');action.run();});t.appendChild(b);}t.classList.toggle('has-act',!!action);t.classList.toggle('bad',bad);t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),action?7000:bad?6500:3200);}
 async function api(path,{method='GET',body,timeout}={}){
  const headers={Accept:'application/json'};
  if(method!=='GET'){headers['Content-Type']='application/json';headers['X-Naru-Token']=S.data?.csrf_token||'';}
@@ -206,7 +213,7 @@ function lineDiff(a,b){
 const diffHTML=(a,b)=>`<div class="diff">${lineDiff(a,b).map(l=>`<div class="${l.k}">${esc(l.t)||' '}</div>`).join('')}</div>`;
 
 // ---------- theme & shell ----------
-function applyTheme(){const t=pref.get('theme','dark');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;try{window.naruDesktop?.setTheme?.(t)?.catch?.(()=>{});}catch{}if(hero)hero.recolor();}
+function applyTheme(){const {mode,style}=themePrefs(),root=document.documentElement;if(mode==='system')delete root.dataset.theme;else root.dataset.theme=mode;root.dataset.mode=mode==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):mode;if(style==='naru')delete root.dataset.style;else root.dataset.style=style;try{window.naruDesktop?.setTheme?.(mode)?.catch?.(()=>{});}catch{}if(hero)hero.recolor();}
 function setSide(hidden){S.sideHidden=hidden;pref.set('side',hidden?'0':'1');$('app').classList.toggle('no-side',hidden);renderTop();}
 function closeSide(){$('app').classList.remove('side-open');}
 function go(view){S.view=view;closePop();closeSide();renderAll();$('main').focus({preventScroll:true});}
@@ -280,10 +287,10 @@ function renderTools(){
  <button type="button" class="chip ${S.imageModes[draftKey()]?'on':''}" data-act="image-mode" aria-pressed="${!!S.imageModes[draftKey()]}" title="이미지 만들기"${S.sending||S.mode==='plan'?' disabled':''}>${icon('image')}<span>${S.imageModes[draftKey()]?tr('이미지 · ')+esc(S.imageModes[draftKey()].model==='__default__'?'ChatGPT':S.imageModes[draftKey()].model):tr('이미지 만들기')}</span></button>
  <button type="button" class="chip" id="model-chip" data-act="model-menu" aria-haspopup="dialog" title="모델 바꾸기"${active||S.modelSaving||S.reasoningSaving?' disabled':''}><span>${esc(modelLabel())}</span>${icon('caret','caret')}</button>
  <button type="button" class="chip reasoning-chip ${sessionReasoning()!=='default'?'on':''}" id="reasoning-chip" data-act="reasoning-menu" aria-haspopup="dialog" aria-label="추론 강도: ${esc(REASONING_LABELS[sessionReasoning()]||tr('기본'))}" title="추론 강도"${(!reasoningEligible(provider())||S.imageModes[draftKey()]||S.sending||S.reasoningSaving||S.modelSaving||(S.sid&&!S.detail))?' disabled':''}>${icon('bolt')}<span>${esc(REASONING_LABELS[sessionReasoning()]||tr('기본'))}</span>${icon('caret','caret')}</button>
- ${hasSteerRetry()&&!S.sending?tr`<div class="seg" role="group" aria-label="추가 지시 전송 확인"><button type="button" aria-pressed="true" title="같은 요청을 다시 확인해요">전송 재확인</button><button type="button" data-act="followup-mode" data-mode="${active?'queue':'new'}">${active?tr('대기열'):tr('새 메시지')}</button></div>`:active?tr`<div class="seg" role="group" aria-label="진행 중 메시지 방식"><button type="button" data-act="followup-mode" data-mode="steer" aria-pressed="${steeringMode()}"${!canSteer()||S.sending?' disabled':''} title="다음 모델 호출에서 추가 지시를 반영해요">추가 지시</button><button type="button" data-act="followup-mode" data-mode="queue" aria-pressed="${!steeringMode()}"${S.sending?' disabled':''} title="현재 작업이 끝나면 새 메시지로 실행해요">대기열</button></div>`:tr`<div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${S.modeSaving||S.sending?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${S.modeSaving||S.sending?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button><button type="button" data-act="mode" data-mode="plan" aria-pressed="${S.mode==='plan'}"${S.modeSaving||S.sending?' disabled':''} title="읽고 조사한 뒤 계획을 세워요">계획</button></div>`}
+ ${hasSteerRetry()&&!S.sending?tr`<div class="seg" role="group" aria-label="추가 지시 전송 확인"><button type="button" aria-pressed="true" title="같은 요청을 다시 확인해요">전송 재확인</button><button type="button" data-act="followup-mode" data-mode="${active?'queue':'new'}">${active?tr('대기열'):tr('새 메시지')}</button></div>`:active?tr`<div class="seg" role="group" aria-label="진행 중 메시지 방식"><button type="button" data-act="followup-mode" data-mode="steer" aria-pressed="${steeringMode()}"${!canSteer()||S.sending?' disabled':''} title="${canSteer()?tr('다음 모델 호출에서 추가 지시를 반영해요'):tr('현재 작업은 대기열만 지원해요')}">추가 지시</button><button type="button" data-act="followup-mode" data-mode="queue" aria-pressed="${!steeringMode()}"${S.sending?' disabled':''} title="현재 작업이 끝나면 새 메시지로 실행해요">대기열</button></div>`:tr`<div class="seg" role="group" aria-label="작업 방식"><button type="button" data-act="mode" data-mode="chat" aria-pressed="${S.mode==='chat'}"${S.modeSaving||S.sending?' disabled':''} title="파일이나 명령을 건드리지 않아요">대화</button><button type="button" data-act="mode" data-mode="agent" aria-pressed="${S.mode==='agent'}"${S.modeSaving||S.sending?' disabled':''} title="파일을 읽고 바꿀 수 있어요. 도구 승인 방식은 설정에서 정해요">에이전트</button><button type="button" data-act="mode" data-mode="plan" aria-pressed="${S.mode==='plan'}"${S.modeSaving||S.sending?' disabled':''} title="읽고 조사한 뒤 계획을 세워요">계획</button></div>`}
  <button type="button" class="chip ${sk.length?'on':''}" id="skill-chip" data-act="skills-menu" aria-haspopup="menu" title="스킬" aria-label="스킬">${icon('skill')}${sk.length?`<span>${sk.length===1?esc(sk[0].name):sk.length+tr('개')}</span>`:''}</button>
  <button type="button" class="chip access-chip" data-act="session-access" aria-haspopup="dialog" aria-label="이 대화의 도구 승인: ${esc(accessLabel())}" title="이 대화의 도구 승인"${S.sending||S.accessSaving||(S.sid&&!S.detail)?' disabled':''}><span>${esc(accessLabel())}</span>${icon('caret','caret')}</button>
- ${hasSteerRetry()&&!S.sending?tr('<span class="followup-hint">전송 여부를 다시 확인해 주세요</span>'):steeringMode()?`<span class="followup-hint">${canSteer()?tr('다음 모델 호출 때 전달 · 실행 중인 도구는 계속'):tr('지금은 추가 지시를 받을 수 없어요')}</span>`:active&&!canSteer()?tr('<span class="followup-hint">현재 작업은 대기열만 지원해요</span>'):''}
+ ${hasSteerRetry()&&!S.sending?tr('<span class="followup-hint">전송 여부를 다시 확인해 주세요</span>'):steeringMode()?`<span class="followup-hint">${canSteer()?tr('다음 모델 호출 때 전달 · 실행 중인 도구는 계속'):tr('지금은 추가 지시를 받을 수 없어요')}</span>`:''}
  <span class="grow"></span>
  ${active?tr`<button type="button" class="send stop" data-act="stop" title="중지 (⌘.)" aria-label="중지">${icon('stop')}</button>`:''}<button type="submit" class="send" id="send" title="${hasSteerRetry()&&!S.sending?tr('추가 지시 전송 재확인'):steeringMode()?tr('추가 지시 보내기'):enqueueMode()?tr('대기열에 추가'):tr('보내기')}" aria-label="${hasSteerRetry()&&!S.sending?tr('추가 지시 전송 재확인'):steeringMode()?tr('추가 지시 보내기'):enqueueMode()?tr('대기열에 추가'):tr('보내기')}"${canSend()?'':' disabled'}>${icon('up')}</button>`; if(pop&&pop.anchor?.id==='reasoning-chip'){pop.anchor=$('reasoning-chip');placePop();}
 }
@@ -330,9 +337,10 @@ function renderThread(toBottom=false){
  if(!d||empty){col.innerHTML='';return;}
  const near=scroll.scrollHeight-scroll.scrollTop-scroll.clientHeight<140;
  S.codes=[];S.msgs.clear();
- const items=[...d.messages.map(m=>({t:m.created_at,k:0,v:m})),...d.runs.map(r=>({t:r.started_at,k:1,v:r}))].sort((a,b)=>a.t<b.t?-1:a.t>b.t?1:a.k-b.k);
- const lastAssistant=[...d.messages].reverse().find(m=>m.role==='assistant');
- const lastMsg=d.messages[d.messages.length-1];const latest=latestRun();
+ const shown=d.messages.filter(m=>!(m.kind==='clarification'&&m.run_id&&d.runs.some(r=>r.id===m.run_id)));
+ const items=[...shown.map(m=>({t:m.created_at,k:0,v:m})),...d.runs.map(r=>({t:r.started_at,k:1,v:r}))].sort((a,b)=>a.t<b.t?-1:a.t>b.t?1:a.k-b.k);
+ const lastAssistant=[...shown].reverse().find(m=>m.role==='assistant');
+ const lastMsg=shown[shown.length-1];const latest=latestRun();
  chat.classList.toggle('agent-running',['agent','plan'].includes(latest?.mode)&&latest?.status==='running');
  const focused=document.activeElement?.matches?.('[data-question-input]')?document.activeElement:null,focusId=focused?.dataset.questionInput,selection=focused?[focused.selectionStart,focused.selectionEnd]:null;
  col.innerHTML=items.map(it=>it.k===0?messageHTML(it.v,it.v===lastAssistant&&it.v===lastMsg&&!runActive()):runHTML(it.v,it.v===latest)).join('');
@@ -414,7 +422,7 @@ function stepHTML(st){
  const L=stepLabel(st.name,st.args,st.result),bad=stepFailed(st.result),denied=bad&&/거절/.test(String(st.result.error||''));
  const g=!st.done?tr('<span class="spinner" role="img" aria-label="진행 중"></span>'):icon(bad?'x':L.icon);
  const open=S.steps.has(st.id);
- return `<button type="button" class="step ${denied?'denied':bad?'err':''}" data-act="toggle-step" data-id="${esc(st.id)}" aria-expanded="${open}"><span class="g">${g}</span><span class="what">${esc(L.what)}</span><span class="target${L.mono?' mono':''}">${esc(L.target)}</span>${denied?tr('<span class="side-note">거절함</span>'):L.note?`<span class="side-note">${esc(L.note)}</span>`:''}</button>${open?`<div class="detail">${detailHTML(st)}</div>`:''}`;
+ return `<button type="button" class="step ${denied?'denied':bad?'err':''}" data-icon="${esc(L.icon)}" data-act="toggle-step" data-id="${esc(st.id)}" aria-expanded="${open}"><span class="g">${g}</span><span class="what">${esc(L.what)}</span><span class="target${L.mono?' mono':''}">${esc(L.target)}</span>${denied?tr('<span class="side-note">거절함</span>'):L.note?`<span class="side-note">${esc(L.note)}</span>`:''}</button>${open?`<div class="detail">${detailHTML(st)}</div>`:''}${st.name==='ask_user'&&st.result?.answer?`<div class="u qa-answer"><div class="bubble">${esc(st.result.answer)}</div></div>`:''}`;
 }
 function detailHTML(st){
  const a=st.args||{},r=st.result,out=[];
@@ -506,9 +514,10 @@ function renderDrawer(){
  const el=$('drawer-in');if(!el)return;const d=S.detail;if(!d){el.innerHTML='';return;}
  const arts=d.artifacts||[],run=latestRun(),u=run?.usage||{},p=providerById(run?.provider_id),t=duration(run),requested=run?.create_image&&run.model==='__default__'?tr('ChatGPT 기본 모델'):run?.model||p?.name||tr('기본 모델');
  const ico=n=>/\.(png|jpe?g|gif|webp|svg)$/i.test(n)?'image':/\.(html?|js|ts|py|css|json|sh)$/i.test(n)?'code':'doc';
- el.innerHTML=tr`<h3>파일</h3>${arts.length?arts.map(a=>`<button type="button" class="art" data-artifact="${esc(a.id)}" title="${esc(a.path)}"><span class="ico">${icon(ico(a.name))}</span><div><b>${esc(a.name)}</b><small>${size(a.size)}</small></div></button>`).join(''):tr('<p class="empty-note">파일 없음</p>')}
+ el.innerHTML=tr`<h3>파일</h3>${arts.length?`<div class="spaces">${arts.map(a=>`<button type="button" class="space" data-artifact="${esc(a.id)}" title="${esc(a.path)}"><div class="space-thumb" data-thumb="${esc(a.id)}">${thumbHTML(a,ico)}</div><div class="space-meta"><span class="space-name">${esc(a.name)}</span><span class="space-tag">${esc(extOf(a.name)||size(a.size))}</span></div></button>`).join('')}</div>`:tr('<p class="empty-note">파일 없음</p>')}
  ${run?tr`<h3>마지막 실행</h3><dl class="facts"><dt>요청 모델</dt><dd title="${esc(requested)}">${esc(requested)}</dd>${run.actual_model?tr`<dt>제공자 응답 모델</dt><dd title="${esc(run.actual_model)}">${esc(run.actual_model)}</dd>`:''}<dt>상태</dt><dd>${esc(STATUS[run.status]||run.status)}</dd>${t?tr`<dt>걸린 시간</dt><dd>${t}</dd>`:''}${u.input_tokens?tr`<dt>입력 토큰</dt><dd>${Number(u.input_tokens).toLocaleString()}</dd>`:''}${u.output_tokens?tr`<dt>출력 토큰</dt><dd>${Number(u.output_tokens).toLocaleString()}</dd>`:''}</dl>`:''}
- <h3>작업 폴더</h3><p class="path">${esc(S.data.settings.workspace)}</p>${window.naruDesktop?.revealPath?tr`<button type="button" class="btn sm" style="margin:0 6px" data-act="reveal-workspace">${icon('folder')}Finder에서 보기</button>`:''}`;
+ <h3>작업 폴더</h3><p class="path">${esc(S.data.settings.workspace)}</p>${window.naruDesktop?.revealPath?tr`<button type="button" class="btn sm" style="margin:0 6px" data-act="reveal-workspace">Finder에서 보기${icon('folder')}</button>`:''}`;
+ if(arts.length)loadThumbs(arts,ico);
 }
 
 // ---------- sessions & runs ----------
@@ -896,7 +905,7 @@ function openPalette(){
   {icon:'memory',label:tr('메모리'),run:()=>go('memory')},
   {icon:'settings',label:tr('설정'),run:()=>go('settings')},
   {icon:'sidebar',label:S.sideHidden?tr('사이드바 보기'):tr('사이드바 숨기기'),run:()=>setSide(!S.sideHidden)},
-  {icon:document.documentElement.dataset.theme==='dark'||(!document.documentElement.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches)?'sun':'moon',label:tr('밝기 전환'),run:()=>{const dark=getComputedStyle(document.documentElement).colorScheme==='dark';pref.set('theme',dark?'light':'dark');applyTheme();}},
+  {icon:document.documentElement.dataset.mode==='dark'?'sun':'moon',label:tr('밝기 전환'),run:()=>{const dark=getComputedStyle(document.documentElement).colorScheme==='dark';pref.set('theme',dark?'light':'dark');applyTheme();}},
  ];
  const draw=()=>{
   const q=palette.q.toLowerCase();
@@ -984,18 +993,22 @@ function editQueue(id){
  openDialog(tr('대기 메시지 편집'),tr`<form class="form" id="queue-edit-form"><div class="field"><label for="queue-edit-text">메시지</label><textarea id="queue-edit-text" rows="6" maxlength="100000">${esc(parts.text)}</textarea>${files.length?tr`<span class="hint">첨부는 그대로 유지돼요: ${files.map(esc).join(', ')}</span>`:''}</div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`);
  $('queue-edit-form').addEventListener('submit',ev=>{ev.preventDefault();submitForm(ev.currentTarget,async()=>{const text=$('queue-edit-text').value.trim();if(!text&&!suffix&&!item.images?.length)throw new Error(tr('메시지를 입력해 주세요.'));const content=text+suffix;if(content.length>100000)throw new Error(tr('메시지와 첨부를 합쳐 100,000자 이하로 줄여 주세요.'));await api(`/api/sessions/${enc(sid)}/queue/${enc(id)}`,{method:'PATCH',body:{content}});closeDialog();if(S.sid===sid)await loadDetail();});});
 }
-const PRESETS={openai:{name:'OpenAI',kind:'responses',base_url:'https://api.openai.com/v1'},anthropic:{name:'Claude API',kind:'anthropic',base_url:'https://api.anthropic.com/v1'},gemini:{name:'Gemini API',kind:'gemini',base_url:'https://generativelanguage.googleapis.com/v1beta'},ollama:{name:'Ollama',kind:'ollama',base_url:'http://127.0.0.1:11434'},lmstudio:{name:'LM Studio',kind:'openai',base_url:'http://127.0.0.1:1234/v1'},openrouter:{name:'OpenRouter',kind:'openai',base_url:'https://openrouter.ai/api/v1'},custom:{name:'',kind:'openai',base_url:''}};
+const PRESETS={openai:{name:'OpenAI',kind:'responses',base_url:'https://api.openai.com/v1'},anthropic:{name:'Claude API',kind:'anthropic',base_url:'https://api.anthropic.com/v1'},gemini:{name:'Gemini API',kind:'gemini',base_url:'https://generativelanguage.googleapis.com/v1beta'},ollama:{name:'Ollama',kind:'ollama',base_url:'http://127.0.0.1:11434'},lmstudio:{name:'LM Studio',kind:'openai',base_url:'http://127.0.0.1:1234/v1'},openrouter:{name:'OpenRouter',kind:'openai',base_url:'https://openrouter.ai/api/v1'},deepseek:{name:'DeepSeek',kind:'openai',base_url:'https://api.deepseek.com/v1'},xai:{name:'xAI Grok',kind:'openai',base_url:'https://api.x.ai/v1'},mistral:{name:'Mistral',kind:'openai',base_url:'https://api.mistral.ai/v1'},groq:{name:'Groq',kind:'openai',base_url:'https://api.groq.com/openai/v1'},together:{name:'Together AI',kind:'openai',base_url:'https://api.together.xyz/v1'},fireworks:{name:'Fireworks AI',kind:'openai',base_url:'https://api.fireworks.ai/inference/v1'},cerebras:{name:'Cerebras',kind:'openai',base_url:'https://api.cerebras.ai/v1'},perplexity:{name:'Perplexity',kind:'openai',base_url:'https://api.perplexity.ai'},moonshot:{name:'Kimi (Moonshot)',kind:'openai',base_url:'https://api.moonshot.ai/v1'},zai:{name:'Z.ai GLM',kind:'openai',base_url:'https://api.z.ai/api/paas/v4'},minimax:{name:'MiniMax',kind:'openai',base_url:'https://api.minimax.io/v1'},qwen:{name:'Qwen (DashScope)',kind:'openai',base_url:'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'},huggingface:{name:'Hugging Face',kind:'openai',base_url:'https://router.huggingface.co/v1'},nous:{name:'Nous Portal (Hermes)',kind:'openai',base_url:'https://inference-api.nousresearch.com/v1'},vllm:{name:'vLLM (로컬)',kind:'openai',base_url:'http://127.0.0.1:8000/v1'},llamacpp:{name:'llama.cpp (로컬)',kind:'openai',base_url:'http://127.0.0.1:8080/v1'},jan:{name:'Jan (로컬)',kind:'openai',base_url:'http://127.0.0.1:1337/v1'},custom:{name:'',kind:'openai',base_url:''}};
+// More OpenAI-compatible services, offered in a list beside the common ones.
+const MORE_PRESETS=['deepseek','xai','mistral','groq','together','fireworks','cerebras','perplexity','moonshot','zai','minimax','qwen','huggingface','nous','vllm','llamacpp','jan'];
 const PRESET_NAMES=[['openai','OpenAI'],['anthropic','Claude API'],['gemini','Gemini API'],['ollama','Ollama'],['lmstudio','LM Studio'],['openrouter',tr('OpenRouter 키')],['custom',tr('직접 입력')]];
 function editProvider(id){
  const old=providerById(id);const v=old?{...old}:{...PRESETS.openai,model:'',tools_enabled:true};
- const dlg=openDialog(old?tr('연결 편집'):tr('새 연결'),tr`${old?'':tr`<div class="presets" role="group" aria-label="빠른 설정">${PRESET_NAMES.map(([k,n],i)=>`<button type="button" class="${i===0?'on':''}" data-preset="${k}">${n}</button>`).join('')}</div>`}
+ const dlg=openDialog(old?tr('연결 편집'):tr('새 연결'),tr`${old?'':tr`<div class="presets" role="group" aria-label="빠른 설정">${PRESET_NAMES.map(([k,n],i)=>`<button type="button" class="${i===0?'on':''}" data-preset="${k}">${n}</button>`).join('')}</div><div class="field more-presets"><label for="pf-more">${tr('다른 제공자')}</label><select id="pf-more"><option value="">${tr('목록에서 고르기')}</option>${MORE_PRESETS.map(k=>`<option value="${k}">${esc(PRESETS[k].name)}</option>`).join('')}</select></div>`}
  <form class="form" id="provider-form"><div class="grid2"><div class="field"><label for="pf-name">이름</label><input id="pf-name" name="name" required maxlength="80" value="${esc(v.name)}"></div><div class="field"><label for="pf-kind">API 형식</label><select id="pf-kind" name="kind">${['responses','openai','anthropic','gemini','ollama'].map(k=>`<option value="${k}"${k===v.kind?' selected':''}>${KIND_LABEL[k]}</option>`).join('')}</select></div></div>
  <div class="field"><label for="pf-url">서버 주소</label><input id="pf-url" name="base_url" type="url" required value="${esc(v.base_url)}" placeholder="http://127.0.0.1:1234/v1"></div>
  <div class="field"><label for="pf-model">기본 모델</label><input id="pf-model" name="model" value="${esc(v.model||'')}" placeholder="비워 두면 대화에서 골라요" autocomplete="off"></div>
  <div class="field"><label for="pf-key">API 키</label><input id="pf-key" name="api_key" type="password" autocomplete="new-password" placeholder="${old?.has_key?tr('저장된 키를 그대로 써요'):tr('로컬 서버는 비워 두세요')}">${old?.has_key?tr('<label class="check"><input type="checkbox" name="clear_key"><span>저장된 키 지우기</span></label>'):''}</div>
  <label class="check"><input type="checkbox" name="tools_enabled"${v.tools_enabled!==false?' checked':''}><span>에이전트 도구 쓰기<small>도구 호출을 지원하지 않는 모델이면 끄세요.</small></span></label>
  <div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">저장</button></div></form>`,{wide:true});
- dlg.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{const p=PRESETS[b.dataset.preset];$('pf-name').value=p.name;$('pf-kind').value=p.kind;$('pf-url').value=p.base_url;dlg.querySelectorAll('[data-preset]').forEach(x=>x.classList.toggle('on',x===b));(p.base_url?$('pf-model'):$('pf-url')).focus();}));
+ const usePreset=(key,b)=>{const p=PRESETS[key];if(!p)return;$('pf-name').value=p.name;$('pf-kind').value=p.kind;$('pf-url').value=p.base_url;dlg.querySelectorAll('[data-preset]').forEach(x=>x.classList.toggle('on',x===b));if(b&&$('pf-more'))$('pf-more').value='';(p.base_url?$('pf-model'):$('pf-url')).focus();};
+ dlg.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>usePreset(b.dataset.preset,b)));
+ $('pf-more')?.addEventListener('change',ev=>usePreset(ev.target.value,null));
  $('provider-form').addEventListener('submit',ev=>{ev.preventDefault();const f=new FormData(ev.target),body=Object.fromEntries(f);body.tools_enabled=f.has('tools_enabled');body.clear_key=f.has('clear_key');if(old)body.id=old.id;
   submitForm(ev.target,async()=>{const saved=await api('/api/providers',{method:'POST',body});delete S.models[saved.id];delete S.modelFetch[saved.id];delete S.tests[saved.id];await refreshState();closeDialog();renderAll();toast(tr('저장했어요'));});});
 }
@@ -1034,7 +1047,7 @@ async function importDiscoveredSkill(el){
  el.disabled=true;try{await connectSkillFolder(el.dataset.path);}catch(err){el.disabled=false;dialogError(err.message);}
 }
 function importSkillFolder(){
- const picker=window.naruDesktop?.chooseDirectory?tr`<button type="button" class="btn" data-act="pick-folder" data-id="skill-folder-path">${icon('folder')}고르기</button>`:'';
+ const picker=window.naruDesktop?.chooseDirectory?tr`<button type="button" class="btn" data-act="pick-folder" data-id="skill-folder-path">고르기${icon('folder')}</button>`:'';
  openDialog(tr('스킬 폴더 연결'),tr`<form class="form" id="skill-folder-form"><div class="field"><label for="skill-folder-path">SKILL.md가 들어 있는 폴더</label><div class="inrow"><input id="skill-folder-path" name="path" required placeholder="예: /Users/name/.agents/skills/ego-browser">${picker}</div><span class="hint">스킬의 지침, 폴더 경로와 참조 파일은 모델 제공자에게 전달될 수 있어요. 원본 변경 후에는 다시 연결하세요. 외부 도구는 별도로 설치해야 해요.</span></div><div class="actions"><button type="button" class="btn ghost" data-act="close-dialog">취소</button><button type="submit" class="btn primary">연결하고 선택</button></div></form>`,{wide:true,desc:tr('연결 후 입력창의 스킬 메뉴에서 선택하세요. 파일 변경과 명령 실행은 도구 승인 설정을 따라요.')});
  $('skill-folder-form').addEventListener('submit',ev=>{ev.preventDefault();const path=$('skill-folder-path').value.trim();if(!path){dialogError(tr('스킬 폴더를 선택하세요.'));return;}return submitForm(ev.target,()=>connectSkillFolder(path));});
 }
@@ -1044,11 +1057,12 @@ function saveMemoryDialog(content){
 }
 async function openArtifact(id){
  const dlg=$('preview');S.blobs.forEach(u=>URL.revokeObjectURL(u));S.blobs=[];
- dlg.innerHTML=tr`<div class="pv-head"><b>불러오는 중</b>${iconBtn('x',tr('닫기'),'close-preview')}</div><div class="pv-body"></div>`;
+ dlg.classList.add('window');dlg.classList.remove('max');
+ dlg.innerHTML=`${winBar(tr('불러오는 중'))}<div class="pv-body"></div>`;
  if(!dlg.open)dlg.showModal();
  try{
   const info=await api(`/api/artifacts/${enc(id)}/content`),dl=`/api/artifacts/${enc(id)}/download`,name=info.name,ext=(name.split('.').pop()||'').toLowerCase();
-  const tools=tr`${window.naruDesktop?.revealPath?iconBtn('folder',tr('Finder에서 보기'),'reveal','',`data-path="${esc(info.path)}"`):''}${window.naruDesktop?.openPath?iconBtn('external',tr('기본 앱으로 열기'),'open-path','',`data-path="${esc(info.path)}"`):''}<a class="icon-btn" href="${dl}" download title="내려받기" aria-label="내려받기">${icon('download')}</a>${iconBtn('x',tr('닫기'),'close-preview')}`;
+  const tools=tr`${window.naruDesktop?.revealPath?iconBtn('folder',tr('Finder에서 보기'),'reveal','',`data-path="${esc(info.path)}"`):''}${window.naruDesktop?.openPath?iconBtn('external',tr('기본 앱으로 열기'),'open-path','',`data-path="${esc(info.path)}"`):''}<a class="icon-btn" href="${dl}" download title="내려받기" aria-label="내려받기">${icon('download')}</a>`;
   let body;
   if(/^image\/(png|jpeg|gif|webp)$/.test(info.mime))body=`<img src="${dl}?inline=1" alt="${esc(name)}">`;
   else if(info.text!=null&&(ext==='html'||ext==='htm')){const u=URL.createObjectURL(new Blob([info.text],{type:'text/html'}));S.blobs.push(u);body=tr`<iframe sandbox="" src="${u}" title="${esc(name)} 미리보기"></iframe>`;}
@@ -1056,7 +1070,7 @@ async function openArtifact(id){
   else if(info.text!=null&&(ext==='md'||ext==='markdown'))body=`<div class="md">${markdown(info.text)}</div>`;
   else if(info.text!=null)body=`<pre>${esc(info.text)}</pre>`;
   else body=tr('<div class="blank"><p>여기서는 미리 볼 수 없는 형식이에요.</p></div>');
-  dlg.innerHTML=`<div class="pv-head"><b title="${esc(info.path)}">${esc(name)}</b>${tools}</div><div class="pv-body">${body}</div>`;
+  dlg.innerHTML=`${winBar(name,tools)}<div class="pv-body">${body}</div>`;
  }catch(err){dlg.querySelector('.pv-body').innerHTML=`<div class="blank"><p>${esc(err.message)}</p></div>`;}
 }
 
@@ -1069,7 +1083,7 @@ function renderModels(){
   const st=a?.[key];let badge='',sub='',act='';
   if(!st)badge=tr('<span class="spinner" role="img" aria-label="확인하는 중"></span>');
   else if(st.execution_blocked){badge=tr('<span class="badge attention">사용 일시 중지</span>');sub=key==='gemini_cli'?tr('도구 격리 검증 중 · Gemini API를 사용하세요.'):tr('도구 격리 검증 중 · 다른 모델의 API를 사용하세요.');act=tr('<button type="button" class="btn sm" data-act="add-provider">API 연결 추가</button>');}
-  else if(key!=='openrouter'&&!st.available){badge=tr('<span class="badge neutral">설치 필요</span>');sub=st.install?`<code>${esc(st.install)}</code>`:'';act=tr`<button type="button" class="btn sm" data-act="copy-install" data-id="${key}">${icon('copy')}설치 명령 복사</button>`;}
+  else if(key!=='openrouter'&&!st.available){badge=tr('<span class="badge neutral">설치 필요</span>');sub=st.install?`<code>${esc(st.install)}</code>`:'';act=tr`<button type="button" class="btn sm" data-act="copy-install" data-id="${key}">설치 명령 복사${icon('copy')}</button>`;}
   else if(!st.authenticated){badge=tr('<span class="badge attention">로그인 필요</span>');act=tr`<button type="button" class="btn sm" data-act="account-login" data-id="${key}">로그인</button>`;}
   else{badge=tr('<span class="badge done">연결됨</span>');if(/API 키|@/.test(st.message||''))sub=esc(st.message);act=tr`<button type="button" class="btn sm" data-act="account-use" data-id="${key}">대화 시작</button>${key==='openrouter'?iconBtn('retry',tr('다시 로그인'),'account-login',key):''}`;}
   return `<div class="item model-row"><span class="model-icon" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(name)}${badge}</div>${sub?`<span class="sub ${st?.execution_blocked?'block-detail':''}"${st?.execution_blocked&&st.message?` title="${esc(st.message)}"`:''}>${sub}</span>`:''}</div><div class="acts2">${act}</div></div>`;
@@ -1079,16 +1093,16 @@ function renderModels(){
   const isLocal=p.kind==='ollama'||/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(host(p.base_url));
   return tr`<div class="item model-row"><span class="model-icon" aria-hidden="true">${icon(isLocal?'terminal':'globe')}</span><div class="txt"><div class="name">${esc(p.name)}${badge}</div><span class="sub">${esc(p.model||host(p.base_url))}${p.model?`<i class="host">${esc(host(p.base_url))}</i>`:''}</span>${t&&!t.pending&&!t.ok&&t.message?`<span class="sub bad">${esc(t.message)}</span>`:''}</div><div class="acts2"><button type="button" class="btn sm ghost" data-act="test-provider" data-id="${esc(p.id)}"${t?.pending?' disabled':''}>확인</button><button type="button" class="btn sm" data-act="use-provider" data-id="${esc(p.id)}">대화 시작</button>${iconBtn('edit',tr('편집'),'edit-provider',p.id)}${iconBtn('trash',tr('삭제'),'delete-provider',p.id)}</div></div>`;};
  $('main').innerHTML=page(tr('모델'),tr`<div class="models-page"><h2>계정으로 연결<span class="grow"></span>${iconBtn('retry',tr('상태 다시 확인'),'accounts-refresh')}</h2><div class="panel model-list">${rows.map(acct).join('')}</div>
- <h2>API와 로컬 서버<span class="grow"></span>${apis.length?tr`<button type="button" class="btn sm" data-act="add-provider">${icon('plus')}연결 추가</button>`:''}</h2>
+ <h2>API와 로컬 서버<span class="grow"></span>${apis.length?tr`<button type="button" class="btn sm" data-act="add-provider">연결 추가${icon('plus')}</button>`:''}</h2>
  <div class="panel model-list">${apis.length?apis.map(apiRow).join(''):tr('<div class="blank"><p>Ollama, LM Studio 같은 로컬 서버나 API 키로 모델을 더할 수 있어요.</p><button type="button" class="btn primary" data-act="add-provider">연결 추가</button></div>')}</div></div>`);
 }
 function renderSkills(){
  const list=S.data.skills||[];
- $('main').innerHTML=page(tr('스킬'),tr`<p class="lead">스킬 지침은 모델에 전달되며, 도구는 에이전트 모드의 승인 설정을 따라요.</p><div class="panel design-grid">${list.length?list.map(s=>tr`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}${s.source_dir?tr`<span class="sub" title="${esc(s.source_dir)}">폴더 연결됨</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit',tr('편집'),'edit-skill',s.id)}${iconBtn('trash',tr('삭제'),'delete-skill',s.id)}</div></div>`).join(''):tr('<div class="blank"><p>아직 스킬이 없어요.</p></div>')}</div>`,tr`<div class="skill-actions"><button type="button" class="btn" data-act="discover-skills">설치된 스킬 찾기</button><button type="button" class="btn" data-act="import-skill-folder">스킬 폴더 연결</button><button type="button" class="btn" data-act="import-skill">파일만 가져오기</button><button type="button" class="btn primary" data-act="add-skill">${icon('plus')}스킬 만들기</button></div>`);
+ $('main').innerHTML=page(tr('스킬'),tr`<p class="lead">스킬 지침은 모델에 전달되며, 도구는 에이전트 모드의 승인 설정을 따라요.</p><div class="panel design-grid">${list.length?list.map(s=>tr`<div class="item"><span class="glyph" aria-hidden="true">${icon('skill')}</span><div class="txt"><div class="name">${esc(s.name)}</div>${s.description?`<span class="sub">${esc(s.description)}</span>`:''}${s.source_dir?tr`<span class="sub" title="${esc(s.source_dir)}">폴더 연결됨</span>`:''}</div><div class="acts2"><button type="button" class="switch" role="switch" aria-checked="${!!s.enabled}" aria-label="${esc(s.name)} 켜기" data-act="skill-toggle" data-id="${esc(s.id)}"></button>${iconBtn('edit',tr('편집'),'edit-skill',s.id)}${iconBtn('trash',tr('삭제'),'delete-skill',s.id)}</div></div>`).join(''):tr('<div class="blank"><p>아직 스킬이 없어요.</p></div>')}</div>`,tr`<div class="skill-actions"><button type="button" class="btn" data-act="discover-skills">설치된 스킬 찾기</button><button type="button" class="btn" data-act="import-skill-folder">스킬 폴더 연결</button><button type="button" class="btn" data-act="import-skill">파일만 가져오기</button><button type="button" class="btn primary" data-act="add-skill">스킬 만들기${icon('plus')}</button></div>`);
 }
 function renderWorkflows(){
  const list=S.data.workflows||[];
- $('main').innerHTML=page(tr('작업 흐름'),tr`<p class="lead">선택한 모델로 새 대화를 시작해요. 모델 사용량과 도구 승인 설정이 적용돼요.</p><div class="panel design-grid">${list.length?list.map(w=>tr`<div class="item"><span class="glyph" aria-hidden="true">${icon('bolt')}</span><div class="txt"><div class="name">${esc(w.name)} <span class="badge neutral">${w.mode==='agent'?tr('에이전트'):w.mode==='plan'?tr('계획'):tr('대화')}</span></div></div><div class="acts2"><button type="button" class="btn primary sm" data-act="run-workflow" data-id="${esc(w.id)}">실행</button>${iconBtn('edit',tr('편집'),'edit-workflow',w.id)}${iconBtn('trash',tr('삭제'),'delete-workflow',w.id)}</div></div>`).join(''):tr('<div class="blank"><p>저장된 작업 흐름이 없어요.</p></div>')}</div>`,tr`<button type="button" class="btn primary" data-act="add-workflow">${icon('plus')}작업 흐름 만들기</button>`);
+ $('main').innerHTML=page(tr('작업 흐름'),tr`<p class="lead">선택한 모델로 새 대화를 시작해요. 모델 사용량과 도구 승인 설정이 적용돼요.</p><div class="panel design-grid">${list.length?list.map(w=>tr`<div class="item"><span class="glyph" aria-hidden="true">${icon('bolt')}</span><div class="txt"><div class="name">${esc(w.name)} <span class="badge neutral">${w.mode==='agent'?tr('에이전트'):w.mode==='plan'?tr('계획'):tr('대화')}</span></div></div><div class="acts2"><button type="button" class="btn primary sm" data-act="run-workflow" data-id="${esc(w.id)}">실행</button>${iconBtn('edit',tr('편집'),'edit-workflow',w.id)}${iconBtn('trash',tr('삭제'),'delete-workflow',w.id)}</div></div>`).join(''):tr('<div class="blank"><p>저장된 작업 흐름이 없어요.</p></div>')}</div>`,tr`<button type="button" class="btn primary" data-act="add-workflow">작업 흐름 만들기${icon('plus')}</button>`);
 }
 function editWorkflow(id){
  const item=id?(S.data.workflows||[]).find(w=>String(w.id)===String(id)):null;if(id&&!item)return;
@@ -1134,12 +1148,18 @@ function setLanguage(language){
  const skip=document.querySelector('.skip');if(skip)skip.textContent=language==='en'?'Skip to content':'본문으로 건너뛰기';
  $('side')?.setAttribute('aria-label',language==='en'?'Chat list':'대화 목록');
 }
+const THEME_CARDS=[['naru','Naru','#f7f7f7','#000000','#1a1a1a','#ffffff','#0880f7'],['defined','Defined','#ffffff','#000000','#000000','#ffffff',''],['cursor','Cursor','#f7f7f4','#26251e','#1c1b17','#f7f7f4','#f54e00'],['vercel','Vercel','#fafafa','#171717','#0a0a0a','#ededed','#0070f3'],['raycast','Raycast','#f4f4f6','#121212','#07080a','#f4f4f6','#ff6363']];
+function themePickerHTML(){
+ const {mode,style}=themePrefs();
+ return `<h3 class="set-sub">${esc(tr('테마'))}</h3><div class="theme-picker" role="group" aria-label="${esc(tr('테마'))}">${THEME_CARDS.map(([k,n,lb,li,db,di,ac])=>`<button type="button" class="theme-opt" data-act="theme" data-id="${k}" aria-pressed="${style===k}"><span class="theme-swatch" aria-hidden="true"><span style="background:${lb};color:${li}">Aa</span><span style="background:${db};color:${di}">Aa</span>${ac?`<i style="background:${ac}"></i>`:''}</span><span>${n}</span></button>`).join('')}</div>
+ <h3 class="set-sub">${esc(tr('밝기'))}</h3><div class="seg wide" role="group" aria-label="${esc(tr('밝기'))}">${MODES.map(k=>`<button type="button" data-act="brightness" data-id="${k}" aria-pressed="${mode===k}">${k==='system'?tr('시스템'):k==='light'?tr('밝게'):tr('어둡게')}</button>`).join('')}</div>`;
+}
 function renderSettings(){
  const x=S.data.settings,theme=pref.get('theme','dark'),desk=!!window.naruDesktop?.chooseDirectory;
- const picker=id=>desk?tr`<button type="button" class="btn" data-act="pick-folder" data-id="${id}" title="폴더 고르기">${icon('folder')}고르기</button>`:'';
+ const picker=id=>desk?tr`<button type="button" class="btn" data-act="pick-folder" data-id="${id}" title="폴더 고르기">고르기${icon('folder')}</button>`:'';
  $('main').innerHTML=page(tr('설정'),tr`<form class="form" id="settings-form">
  <h2>언어</h2><div class="seg wide" role="group" aria-label="Language">${[['ko','한국어'],['en','English']].map(([code,label])=>`<button type="button" data-act="language" data-id="${code}" aria-pressed="${(window.NaruI18n?.language||'ko')===code}">${label}</button>`).join('')}</div>
- <h2>화면</h2><div class="seg wide" role="group" aria-label="밝기">${[['system',tr('시스템')],['light',tr('밝게')],['dark',tr('어둡게')]].map(([k,n])=>`<button type="button" data-act="theme" data-id="${k}" aria-pressed="${theme===k}">${n}</button>`).join('')}</div>
+ <h2>화면</h2>${themePickerHTML()}
  <h2>알림</h2><div class="field" id="notification-setting">${notificationHTML()}</div>
  <h2>업데이트</h2><div id="update-setting" class="update-setting" role="status" aria-live="polite">${updateHTML()}</div>
  <h2>폴더</h2><div class="field"><label for="st-ws">작업 폴더</label><div class="inrow"><input id="st-ws" name="workspace" required value="${esc(x.workspace)}">${picker('st-ws')}</div><span class="hint">프로젝트 지침은 모델 제공자에게 전달돼요.</span></div>
@@ -1207,7 +1227,7 @@ async function accountLogin(key){
  if(r.url){await openExternal(r.url);toast(tr('브라우저에서 OpenRouter 로그인을 마치세요.'));}
  else toast(r.terminal?tr('터미널에서 로그인을 마치면 자동으로 확인해요.'):tr('브라우저에서 로그인을 마치면 자동으로 확인해요.'));
  clearInterval(S.watch);let n=0;
- S.watch=setInterval(async()=>{n++;try{S.accounts=await api('/api/accounts?refresh=1');if(S.accounts[key]?.authenticated){clearInterval(S.watch);await refreshState();toast(tr`${ACCOUNT_NAMES[key]} 연결됨`);}if(S.view==='models')renderModels();}catch{}if(n>75)clearInterval(S.watch);},4000);
+ S.watch=setInterval(async()=>{n++;try{S.accounts=await api('/api/accounts?refresh=1');if(S.accounts[key]?.authenticated){clearInterval(S.watch);await refreshState();toast(tr`${ACCOUNT_NAMES[key]} 연결됨`,false,{label:'대화 시작',run:()=>accountUse(key).catch(err=>toast(err.message,true))});}if(S.view==='models')renderModels();}catch{}if(n>75)clearInterval(S.watch);},4000);
 }
 async function accountUse(key){
  if((S.accounts||S.data?.accounts)?.[key]?.execution_blocked){toast(tr('이 계정 연결은 일시 중지되었어요. API 연결을 사용하세요.'),true);return;}
@@ -1284,7 +1304,8 @@ const ACT={
  'run-workflow':async el=>{el.disabled=true;try{await runWorkflow(el.dataset.id);}finally{if(el.isConnected)el.disabled=false;}},
  'delete-memory':el=>confirmDialog(tr('이 메모리를 지울까요?'),tr('앞으로의 대화에 더는 전달되지 않아요.'),tr('지우기'),async()=>{await api(`/api/memories/${enc(el.dataset.id)}`,{method:'DELETE'});await refreshState();renderMemory();}),
  'language':el=>setLanguage(el.dataset.id),
- 'theme':el=>{pref.set('theme',el.dataset.id);applyTheme();document.querySelectorAll('[data-act="theme"]').forEach(b=>b.setAttribute('aria-pressed',String(b===el)));},
+ 'theme':el=>{const before=iconSet(),style=el.dataset.id;pref.set('style',style);applyTheme();document.querySelectorAll('[data-act="theme"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.id===style)));if(iconSet()!==before){renderSide();renderTop();}},
+ 'brightness':el=>{const mode=el.dataset.id;pref.set('theme',mode);applyTheme();document.querySelectorAll('[data-act="brightness"]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.id===mode)));},
  'enable-notifications':()=>enableNotifications(),
  'update-open':()=>go('settings'),
  'update-check':()=>checkUpdate(),
@@ -1341,7 +1362,8 @@ async function tick(){
    if(!live.run_id||live.status!==run.status||(live.rev!==S.detail.rev&&Date.now()-lastFull>450))await loadDetail(10000);
    else if(live.run_id===run.id&&live.text!==S.live){S.live=live.text;paintLive();}
   }
-  if((Object.keys(S.data.active||{}).length||Object.keys(S.data.title_pending||{}).length)&&Date.now()-lastState>2200){lastState=Date.now();const before=JSON.stringify([S.data.active,S.data.sessions]);await refreshState(10000);if(JSON.stringify([S.data.active,S.data.sessions])!==before)renderSide();}
+  if((Object.keys(S.data.active||{}).length||Object.keys(S.data.title_pending||{}).length)&&Date.now()-lastState>2200){lastState=Date.now();const before=JSON.stringify([S.data.active,S.data.sessions]),prevActive={...(S.data.active||{})};await refreshState(10000);if(JSON.stringify([S.data.active,S.data.sessions])!==before){renderSide();backgroundNews(prevActive,S.data.active||{});}}
+  egoCall('sweep');
  }catch{}finally{ticking=false;}
 }
 
@@ -1362,6 +1384,44 @@ async function boot(){
   $('main').innerHTML=tr`<div class="boot"><div><h2>Naru를 열지 못했어요</h2><p>${esc(err.message)}</p><button type="button" class="btn primary" data-act="retry-boot">다시 연결</button></div></div>`;
  }
 }
+
+// ---------- ego(lite) components ----------
+// Existing controls drawn as their ego(lite) Style counterparts: Window (file preview), SpaceCard (files),
+// Toast with an action pill, and the black Tooltip (ego.js). Nothing here adds new decoration.
+function egoCall(fn,...a){try{return window.Ego?window.Ego[fn](...a):null;}catch{return null;}}
+const extOf=n=>(String(n).match(/\.([a-z0-9]{1,6})$/i)||['',''])[1].toLowerCase();
+const thumbCache={},thumbUrls={};
+function thumbHTML(a,ico){
+ const id=String(a.id),ext=extOf(a.name);
+ if(/^(png|jpe?g|gif|webp)$/.test(ext))return `<img src="/api/artifacts/${enc(id)}/download?inline=1" alt="" loading="lazy">`;
+ const t=thumbCache[id];
+ if(t&&t.text!=null){
+  if((ext==='html'||ext==='htm'||ext==='svg')&&typeof Blob!=='undefined'&&window.URL?.createObjectURL){if(!thumbUrls[id])thumbUrls[id]=URL.createObjectURL(new Blob([t.text],{type:ext==='svg'?'image/svg+xml':'text/html'}));return ext==='svg'?`<img src="${thumbUrls[id]}" alt="">`:`<iframe sandbox="" src="${thumbUrls[id]}" tabindex="-1" aria-hidden="true" loading="lazy"></iframe>`;}
+  return `<pre aria-hidden="true">${esc(String(t.text).slice(0,700))}</pre>`;
+ }
+ return `<span class="ph">${icon(ico?ico(a.name):'doc')}</span>`;
+}
+function loadThumbs(arts,ico){
+ arts.filter(a=>!/^(png|jpe?g|gif|webp)$/.test(extOf(a.name))&&!thumbCache[a.id]).slice(0,8).forEach(a=>{
+  thumbCache[a.id]={pending:true};
+  api(`/api/artifacts/${enc(a.id)}/content`).then(r=>{thumbCache[a.id]={text:r.text};}).catch(()=>{thumbCache[a.id]={text:null};}).finally(()=>{const box=document.querySelector(`[data-thumb="${CSS.escape(String(a.id))}"]`);if(box)box.innerHTML=thumbHTML(a,ico);});
+ });
+}
+function winBar(title,acts=''){
+ return `<div class="win-bar"><div class="win-dots"><button type="button" class="win-dot r" data-act="close-preview" aria-label="${esc(tr('닫기'))}"><svg viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 2l4 4M6 2 2 6"/></svg></button><span class="win-dot y" aria-hidden="true"></span><button type="button" class="win-dot g" data-act="max-preview" aria-label="${esc(tr('크게 보기'))}"><svg viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 1.5v5M1.5 4h5"/></svg></button></div><div class="win-title" title="${esc(title)}">${esc(title)}</div><div class="win-acts">${acts}</div></div>`;
+}
+ACT['max-preview']=()=>$('preview').classList.toggle('max');
+function backgroundNews(prev,now){
+ for(const [sid,st] of Object.entries(prev)){
+  if(sid===S.sid&&S.view==='chat')continue;
+  const s=(S.data.sessions||[]).find(x=>x.id===sid);if(!s)continue;
+  const title=(s.title||tr('대화')).slice(0,24),open={label:'열기',run:()=>selectSession(sid)};
+  if(!now[sid]){toast(tr`‘${title}’ 작업을 마쳤어요`,false,open);return;}
+  if(now[sid]==='awaiting_approval'&&st!=='awaiting_approval'){toast(tr`‘${title}’에서 확인이 필요해요`,false,open);return;}
+ }
+}
+{const base=selectSession;selectSession=function(id){if(id!==S.sid){Object.values(thumbUrls).forEach(u=>{try{URL.revokeObjectURL(u);}catch{}});for(const k of Object.keys(thumbUrls))delete thumbUrls[k];for(const k of Object.keys(thumbCache))delete thumbCache[k];}return base.apply(this,arguments);};}
+egoCall('tooltips');
 if(globalThis.__NARU_TEST__){globalThis.NaruUI={markdown,inline,esc,lineDiff,stepLabel,splitAttachments,buildSteps,approvalHTML,detailHTML,modelMenu,modelMenuHTML,modelOptions,loadProviderModels,discoverModels,send,loadDetail,refreshState,addFiles,wireComposer,renderChips,messageHTML,runHTML,imageSource,generatedImagesHTML,imageProviders,openImagePicker,pref,tick,renderSettings,renderDrawer,enableNotifications,notificationHTML,updateHTML,applyUpdateState,initUpdater,checkUpdate,installUpdate,boot,fileReads,queueHTML,renderQueue,renderTools,enqueueMode,sessionAccess,accessLabel,openSessionAccess,saveSessionAccess,parseSkillFile,importSkill,importSkillFolder,discoverSkills,skillDiscoveryHTML,importDiscoveredSkill,renderSkills,renderWorkflows,editWorkflow,runWorkflow,ACT,renderSide,renderTop,startRename,deleteChat,forkMessage,setLanguage,showSelectionReply,replyToSelection,mentionAt,updateFileMention,fileMentionKey,selectContextFile,getFileMention:()=>fileMention,questionHTML,answerQuestion,sessionReasoning,saveReasoning,openReasoningMenu,setModel,steeringMode,sendSteering,S};return;}
 setInterval(tick,280);
 boot();

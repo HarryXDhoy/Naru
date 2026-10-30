@@ -1,0 +1,66 @@
+/* Raycast — data-style="raycast": surfaces stepped like Raycast's window, borders instead of shadows,
+   a pill as the only primary action (white on dark, black on light), Inter with ss03,
+   saturated colour kept out of the chrome; the red stripe appears once, on the first screen. */
+:root[data-style="raycast"]{
+  --font-sans:"Inter","Mona Sans",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
+  --font-display:var(--font-sans);
+  --t-btn-radius:var(--radius-8);--t-pri-radius:var(--radius-full);--t-seg-radius:var(--radius-full);--t-seg-btn-radius:var(--radius-full);
+  --t-comp-radius:var(--radius-12);--t-card-radius:var(--radius-12);
+  --fluid-ultramarine:#ff5757;--fluid-cyan:#a1131a;--fluid-lime:#ff6363;--fluid-amber:#5a0b0f;--fluid-magenta:#ff8a8a;
+}
+:root[data-style="raycast"][data-mode="dark"]{
+  --bg-1:#121212;--bg-2:#0d0d0d;--bg-3:#101111;--bg-4:#07080a;--bg-5:#1b1c1d;--bg-6:#242728;
+  --bg-alpha-1:#ffffff05;--bg-alpha-2:#ffffff0a;--bg-alpha-3:#ffffff0f;--bg-alpha-4:#ffffff14;--bg-alpha-5:#ffffff1a;--bg-alpha-6:#ffffff24;
+  --fg-1:#1b1c1d;--fg-2:#202122;--fg-3:#242728;--fg-4:#2e3132;--fg-5:#434345;
+  --text-0:#ffffff;--text-1:#f4f4f6;--text-2:#cdcdcd;--text-3:#9c9c9d;--text-4:#6a6b6c;--text-5:#434345;
+  --accent:#56c2ff;--accent-bg:#56c2ff26;--accent-light:#56c2ff40;--accent-dark:#9bdcff;
+  --danger:#ff6363;--danger-bg:#ff636326;--heading:#f4f4f6;
+  --page-bg:#07080a;--bg-window:#0d0d0de6;--bg-window-inner:#0d0d0d;--bg-overlay:#000000b3;--bg-tooltip:#242728;--bg-toast:#1b1c1d;--glass-1:#ffffff0f;
+  --badge-run-bg:#56c2ff26;--badge-run-fg:#56c2ff;--badge-done-bg:#59d49926;--badge-done-fg:#59d499;--badge-att-bg:#ffc53126;--badge-att-fg:#ffc531;--badge-err-bg:#ff636326;--badge-err-fg:#ff6363;
+  --shadow-0:0 0 0 .5px #242728;--shadow-1:0 0 0 1px #242728;--shadow-1-1:0 0 0 1px #434345;
+  --shadow-2:0 0 0 1px #242728;--shadow-2-2:0 0 0 1px #242728;--shadow-3:0 0 0 1px #242728,0 24px 64px #000000b3;--shadow-card-hover:0 0 0 1px #434345;
+  --dot-grid-base:#ffffff1a;--dot-grid-active:#ffffffb3;--dot-grid-bg:#07080a66;--dot-side-color:#ffffff;--dot-side-opacity:.05;
+  --hero-surface:#07080a;--hero-paper:#07080a;--hero-title:#ffffff;--hero-title-shadow:0 2px 18px #000;--hero-fine-dot:#ffffff59;--hero-mask-center:#0009;--hero-mask-middle:#000d;
+  --t-btn-bg:#1b1c1d;--t-btn-hover:#242728;--t-btn-ring:0 0 0 1px #242728;
+  --t-pri-bg:#ffffff;--t-pri-fg:#000000;--t-pri-hover:#e8e8e8;
+  --t-tint-bg:#242728;--t-tint-hover:#2e3132;
+  --t-seg-bg:#07080a;--t-seg-ring:0 0 0 1px #242728;--t-seg-on:#242728;--t-seg-on-ring:none;
+  --t-comp-ring:0 0 0 1px #242728;--t-comp-focus:0 0 0 1px #434345;
+  --t-send-bg:#ffffff;--t-send-fg:#000000;
+  --t-inline-code:#1b1c1d;--t-code-bg:#07080a;--t-code-ring:0 0 0 1px #242728;
+  --t-glow:inset 0 0 0 1px #ffffff26,inset 0 0 56px 8px #ffffff0d;
+  --t-status-bg:#1b1c1de6;--t-status-fg:#f4f4f6;--t-status-ring:0 0 0 1px #242728;--t-status-track:#ffffff3d;--t-status-head:#ffffff;
+  --t-sel-bg:#56c2ff40;--t-kbd-bg:#242728;--t-kbd-edge:#434345;
+  color-scheme:dark;
+}
+:root[data-style="raycast"][data-mode="light"]{
+  --bg-1:#ffffff;--bg-2:#f4f4f6;--bg-3:#f9f9fa;--bg-4:#ececef;--bg-5:#e3e3e6;--bg-6:#c9c9cd;
+  --bg-alpha-1:#12121205;--bg-alpha-2:#1212120a;--bg-alpha-3:#1212120f;--bg-alpha-4:#12121214;--bg-alpha-5:#1212121a;--bg-alpha-6:#12121224;
+  --fg-1:#ffffff;--fg-2:#f9f9fa;--fg-3:#ececef;--fg-4:#e3e3e6;--fg-5:#c9c9cd;
+  --text-0:#000000;--text-1:#121212;--text-2:#434345;--text-3:#6a6b6c;--text-4:#9c9c9d;--text-5:#cdcdcd;
+  --accent:#1a8fd6;--accent-bg:#1a8fd61a;--accent-light:#1a8fd633;--accent-dark:#0f5f91;
+  --danger:#e5484d;--danger-bg:#e5484d1a;--heading:#121212;
+  --page-bg:#ececef;--bg-window:#f4f4f6e6;--bg-window-inner:#f4f4f6;--bg-overlay:#f4f4f6cc;--bg-tooltip:#121212;--bg-toast:#121212;--glass-1:#ffffff80;
+  --badge-run-bg:#1a8fd61a;--badge-run-fg:#0f6fab;--badge-done-bg:#1f9d6b1a;--badge-done-fg:#167a52;--badge-att-bg:#f5a6231f;--badge-att-fg:#9a5b00;--badge-err-bg:#e5484d1a;--badge-err-fg:#c4262c;
+  --shadow-0:0 0 0 .5px #e3e3e6;--shadow-1:0 0 0 1px #e3e3e6;--shadow-1-1:0 0 0 1px #c9c9cd;
+  --shadow-2:0 0 0 1px #e3e3e6;--shadow-2-2:0 0 0 1px #e3e3e6;--shadow-3:0 0 0 1px #e3e3e6,0 24px 64px #0000001f;--shadow-card-hover:0 0 0 1px #c9c9cd;
+  --dot-grid-base:#1212121a;--dot-grid-active:#121212b3;--dot-grid-bg:#f4f4f666;--dot-side-color:#121212;--dot-side-opacity:.04;
+  --hero-surface:#f4f4f6;--hero-paper:#f4f4f6;--hero-title:#121212;--hero-title-shadow:0 2px 18px #f4f4f6;--hero-fine-dot:#12121240;--hero-mask-center:#0002;--hero-mask-middle:#000a;
+  --t-btn-bg:#ffffff;--t-btn-hover:#f9f9fa;--t-btn-ring:0 0 0 1px #e3e3e6;
+  --t-pri-bg:#121212;--t-pri-fg:#ffffff;--t-pri-hover:#2b2b2d;
+  --t-tint-bg:#ececef;--t-tint-hover:#e3e3e6;
+  --t-seg-bg:#ececef;--t-seg-ring:0 0 0 1px #e3e3e6;--t-seg-on:#ffffff;--t-seg-on-ring:0 0 0 1px #e3e3e6;
+  --t-comp-ring:0 0 0 1px #e3e3e6;--t-comp-focus:0 0 0 1px #c9c9cd;
+  --t-send-bg:#121212;--t-send-fg:#ffffff;
+  --t-inline-code:#ececef;--t-code-bg:#f9f9fa;--t-code-ring:0 0 0 1px #e3e3e6;
+  --t-glow:inset 0 0 0 1px #12121226,inset 0 0 56px 8px #1212120a;
+  --t-status-bg:#ffffffe6;--t-status-fg:#121212;--t-status-ring:0 0 0 1px #e3e3e6;--t-status-track:#12121226;--t-status-head:#121212;
+  --t-sel-bg:#1a8fd633;--t-kbd-bg:#ececef;--t-kbd-edge:#c9c9cd;
+  color-scheme:light;
+}
+:root[data-style="raycast"] body{font-feature-settings:"calt","kern","liga","ss03"}
+:root[data-style="raycast"] .hero-title{font-weight:600;letter-spacing:-.03em}
+:root[data-style="raycast"] .page-head h1{font-weight:600;letter-spacing:-.02em}
+:root[data-style="raycast"] .session-row:has(>.side-item[aria-current="page"]){background:var(--bg-alpha-4)}
+:root[data-style="raycast"] .agent-status{-webkit-backdrop-filter:none;backdrop-filter:none}
+:root[data-style="raycast"] kbd{background:var(--t-kbd-bg);border-radius:4px;box-shadow:0 1px 0 var(--t-kbd-edge);color:var(--text-2)}

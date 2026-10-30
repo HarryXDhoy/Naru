@@ -1,0 +1,87 @@
+/* ego(lite) Style tokens the base stylesheet lacked, and existing controls drawn as their design-system
+   counterparts: Tooltip, Toast action pill, Window (file preview) and SpaceCard (files in the side panel). */
+@font-face{font-family:"Inter";src:url("/fonts/inter.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Inter Tight";src:url("/fonts/inter-tight.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+:root{
+  --font-display:"Inter Tight","Mona Sans",-apple-system,"Apple SD Gothic Neo",system-ui,sans-serif;
+  --font-text:"Inter","Mona Sans",-apple-system,"Apple SD Gothic Neo",system-ui,sans-serif;
+  --green-5:#33b467;
+  --traffic-red:#ff736a;--traffic-yellow:#febc2e;--traffic-green:#19c332;
+  --dot-grid-base:#3737371a;--dot-grid-active:#004cfe80;--dot-grid-bg:#ffffff4d;
+  --bg-agent-task-bar:#00000099;
+  --shadow-card-hover:inset 0 0 0 1px #00000029,inset 0 0 2px 3px #ffffffcc,0 8px 24px 0 #0000001a;
+}
+:root[data-theme="dark"]{--dot-grid-base:#ffffff26;--dot-grid-active:#6496ffcc;--dot-grid-bg:#00000066;--shadow-card-hover:inset 0 0 0 1px #ffffff29,inset 0 0 2px 3px #2e2e2ecc,0 8px 24px 0 #ffffff1a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--dot-grid-base:#ffffff26;--dot-grid-active:#6496ffcc;--dot-grid-bg:#00000066;--shadow-card-hover:inset 0 0 0 1px #ffffff29,inset 0 0 2px 3px #2e2e2ecc,0 8px 24px 0 #ffffff1a}}
+
+/* Tooltip */
+.tooltip{position:fixed;z-index:95;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;background:var(--bg-tooltip,#000);color:#ffffffe6;font:500 12px/16px var(--font-sans);white-space:nowrap;pointer-events:none;opacity:0;transform:translateY(-2px);transition:opacity .1s cubic-bezier(.34,.69,.1,1),transform .15s cubic-bezier(.34,.69,.1,1)}
+.tooltip.show{opacity:1;transform:none}
+.tooltip .kbd{font:500 11px/14px var(--font-sans);color:#ffffff7a}
+:root[data-theme="dark"] .tooltip{box-shadow:0 0 0 .5px #ffffff26}
+
+/* Toast with an action pill */
+.toast.show{pointer-events:auto}
+.toast.has-act{padding:10px 12px 10px 16px}
+.toast .act{border:0;background:#ffffff1a;color:#fff;font:500 13px/19.5px var(--font-sans);border-radius:999px;padding:2px 10px;flex:none;cursor:pointer}
+.toast .act:hover{background:#ffffff33}
+
+/* Window — file preview */
+dialog.window{background:var(--bg-window);-webkit-backdrop-filter:blur(24px) saturate(1.4);backdrop-filter:blur(24px) saturate(1.4);border-radius:12px;box-shadow:var(--shadow-3);transition:width .3s cubic-bezier(.32,.87,.26,1),height .3s cubic-bezier(.32,.87,.26,1)}
+dialog.window.max{width:calc(100vw - 16px);height:calc(100vh - 16px);max-height:none}
+.win-bar{display:flex;align-items:center;gap:8px;height:40px;padding:0 8px 0 14px;flex:none}
+.win-dots{display:flex;gap:8px;width:120px}
+.win-dot{width:12px;height:12px;border-radius:50%;display:grid;place-items:center;color:transparent;border:0;padding:0;transition:color .1s}
+.win-dot svg{width:8px;height:8px}
+.win-dots:hover .win-dot{color:#0000008c}
+.win-dot.r{background:var(--traffic-red)}.win-dot.y{background:var(--traffic-yellow)}.win-dot.g{background:var(--traffic-green)}
+.win-title{flex:1;min-width:0;text-align:center;font:500 13px/19.5px var(--font-sans);color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.win-acts{display:flex;justify-content:flex-end;gap:2px;width:120px}
+dialog.window .pv-body{background:var(--bg-1);box-shadow:var(--shadow-1);margin:0 6px 6px;border-radius:8px}
+
+/* SpaceCard — files in the drawer */
+.spaces{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px;margin:4px 6px 8px}
+.space{display:flex;flex-direction:column;gap:8px;text-align:left;min-width:0;cursor:pointer}
+.space-thumb{position:relative;aspect-ratio:16/10;border-radius:8px;background:var(--bg-1);box-shadow:var(--shadow-1);overflow:hidden;transition:box-shadow .2s cubic-bezier(.34,.69,.1,1),transform .2s cubic-bezier(.37,1.09,.31,1)}
+.space:hover .space-thumb,.space:focus-visible .space-thumb{box-shadow:var(--shadow-card-hover);transform:translateY(-2px)}
+.space-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.space-thumb iframe{position:absolute;left:0;top:0;width:400%;height:400%;border:0;transform:scale(.25);transform-origin:0 0;pointer-events:none;background:#fff}
+.space-thumb pre{margin:0;padding:8px 9px;font:6.5px/8.5px ui-monospace,Menlo,monospace;color:var(--text-2);white-space:pre-wrap;overflow:hidden;height:100%}
+.space-thumb .ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--text-4)}
+.space-thumb .ph svg{width:20px;height:20px}
+.space-meta{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-width:0}
+.space-name{font:500 14px/20px var(--font-sans);color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.space-tag{font:400 12px/18px var(--font-sans);color:var(--text-3);flex:none}
+
+@media (max-width:760px){.win-dots,.win-acts{width:auto}}
+@media (prefers-reduced-motion:reduce){.space-thumb{transition:none}.space:hover .space-thumb{transform:none}}
+
+/* Provider list beside the preset pills in the connection dialog. */
+.more-presets{margin:0 0 var(--space-16)}
+
+/* Questions from the agent — the same raised card as an approval (fg-1, radius-12, shadow-2-2),
+   with a design-system input and pill buttons; the answer appears as the person's message under the question. */
+.question-card{gap:var(--space-12);max-width:none;margin:12px 0 6px;padding:var(--space-16);border-radius:var(--radius-12);background:var(--fg-1);box-shadow:var(--shadow-2-2)}
+.question-card strong{font:500 16px/24px var(--font-sans);color:var(--text-1)}
+.question-options{gap:var(--space-8)}
+.question-answer{align-items:flex-end;gap:var(--space-8)}
+.question-answer textarea{min-height:40px;padding:8px 10px;border:0;border-radius:var(--radius-8);background:var(--bg-1);box-shadow:var(--shadow-1);font:400 14px/20px var(--font-sans);color:var(--text-1);resize:none}
+.question-answer textarea::placeholder{color:var(--text-4)}
+.question-answer textarea:hover{box-shadow:var(--shadow-1-1)}
+.question-answer textarea:focus,.question-answer textarea:focus-visible{outline:none;box-shadow:0 0 0 1px var(--accent)}
+.qa-answer{margin:6px 0 10px}
+.qa-answer .bubble{font-size:14px;line-height:20px;padding:8px 14px}
+/* Send and stop stay at the right edge even when the composer tools wrap onto a second line. */
+.composer .tools .send{margin-left:auto}
+.composer .tools .send.stop+.send{margin-left:var(--space-4)}
+/* Settings › Appearance: one card per theme (its own canvas, ink and accent), then brightness for Naru's own theme. */
+.theme-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:var(--space-8);margin-bottom:var(--space-12)}
+.theme-opt{display:flex;flex-direction:column;gap:var(--space-6);padding:6px;border-radius:var(--radius-10);font:500 13px/18px var(--font-sans);color:var(--text-2);text-align:left;transition:background-color .15s var(--ease-standard),box-shadow .15s var(--ease-standard)}
+.theme-opt:hover{background:var(--bg-alpha-2);color:var(--text-1)}
+.theme-opt[aria-pressed="true"]{color:var(--text-1);box-shadow:0 0 0 1.5px var(--accent)}
+.theme-opt:focus-visible{box-shadow:0 0 0 2px var(--accent)}
+.theme-opt>span:last-child{padding:0 4px}
+.theme-swatch{position:relative;display:grid;grid-template-columns:1fr 1fr;height:52px;border-radius:var(--radius-6);overflow:hidden;box-shadow:inset 0 0 0 1px #8080802e}
+.theme-swatch>span{display:flex;align-items:flex-end;padding:8px 10px;font:600 16px/1 var(--font-sans);letter-spacing:-.02em}
+.theme-swatch i{position:absolute;right:8px;top:8px;width:9px;height:9px;border-radius:50%}
+.set-sub{margin:4px 0 8px;font:500 13px/19px var(--font-sans);color:var(--text-2)}

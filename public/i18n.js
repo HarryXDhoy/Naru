@@ -140,7 +140,7 @@ const en={
  "답변 보내기": "Send answer",
  "답변을 1~4,000자로 입력해 주세요.": "Enter an answer of 1–4,000 characters.",
  "작업": "Task",
- "단계": "steps",
+ "단계": " steps",
  "진행 기록": "Activity",
  "작업 중": "Working",
  "중지했어요.": "Stopped.",
@@ -352,7 +352,8 @@ const en={
  "밝게": "Light",
  "어둡게": "Dark",
  "화면": "Appearance",
- "밝기": "Theme",
+ "밝기": "Brightness",
+ "테마": "Theme",
  "알림": "Notifications",
  "업데이트": "Updates",
  "폴더": "Folders",
@@ -445,6 +446,8 @@ const en={
 let language='ko';
 try{const saved=window.naruDesktop?.getPreference?.('language')||localStorage.getItem('naru.language');language=['ko','en'].includes(saved)?saved:(navigator.language?.startsWith('ko')?'ko':'en');}catch{}
 Object.assign(en,{"모델에 연결하고 있습니다.": "Connecting to model.", "이미지를 생성하고 있습니다.": "Generating an image.", "작업을 완료했습니다.": "Task complete.", "도구 실행 승인을 기다리고 있습니다.": "Waiting for tool approval.", "사용자의 답변을 기다리고 있습니다.": "Waiting for your answer.", "설정한 작업 단계 한도에 도달했습니다. 기록을 확인하고 재개하거나 한도를 조정하세요.": "The tool-step limit was reached. Review the activity and resume, or adjust the limit.", "실행이 취소되었습니다.": "Task cancelled.", "실행이 중지되었습니다.": "Task stopped.", "연결할 모델 제공자를 선택해 주세요.": "Choose a model provider.", "모델 이름을 입력하거나 목록에서 선택해 주세요.": "Enter a model name or choose one from the list.", "이 대화에서 작업이 이미 진행 중입니다.": "A task is already running in this chat.", "이 질문은 이미 처리되었거나 만료되었습니다.": "This question was already answered or has expired.", "계획 모드에서는 읽기 도구만 사용할 수 있습니다.": "Plan mode supports read-only tools.", "계획 모드에서는 이미지를 생성할 수 없습니다.": "Images cannot be generated in plan mode.", "작업 폴더의 프로젝트 지침을 모델에 전달합니다:": "Sending project instructions to the model:", "올바른 실행 모드를 선택해 주세요.": "Choose a valid mode.", "작업 폴더 또는 파일을 읽을 수 없습니다. 다시 선택해 주세요.": "Could not read the workspace or file. Select again.", "완료": "Complete"});
+Object.assign(en,{"크게 보기":"Zoom","토큰":"tokens","열기":"Open","생각하는 중":"Thinking","확인을 기다려요":"Waiting for your approval","답을 기다려요":"Waiting for your answer","답을 쓰는 중":"Writing","직접 하기":"Take over","작업을 마쳤어요":"finished","에서 확인이 필요해요":"needs you","메모 카드가 떠 있는 그림":"Floating note cards","유리 고리. 끌어서 돌릴 수 있어요":"Glass ring. Drag to spin"});
+Object.assign(en,{"다른 제공자":"Other providers","목록에서 고르기":"Choose from the list","(로컬)":"(local)"});
 const pattern=/[가-힣][가-힣\sA-Za-z0-9·…,.?!:/()~+—→*%≤⌘\\-]*/g;
 function part(text){if(text==null)return text;if(language!=='en')return text;return String(text).replaceAll('API 연결 추가','Add API connection').replaceAll('API와 로컬 서버','APIs and local servers').replaceAll('Naru를 열지 못했어요','Could not open Naru').replaceAll('Naru를 다시 시작할까요?','Restart Naru?').replace(pattern,match=>{const key=match.trim();return Object.hasOwn(en,key)?en[key]+match.slice(match.trimEnd().length):match;});}
 function t(strings,...values){return Array.isArray(strings)?strings.reduce((out,s,i)=>out+part(s)+(i<values.length?values[i]:''),''):part(strings);}

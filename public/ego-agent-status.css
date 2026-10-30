@@ -1,4 +1,19 @@
-.agent-status{display:inline-flex;align-items:center;gap:9px;max-width:100%;margin:8px 0 12px;padding:7px 12px;border-radius:10px;background:var(--bg-3);box-shadow:inset 0 0 0 1px var(--bg-alpha-3);color:var(--text-2);font:500 13px/20px var(--font-sans)}
-.agent-status-indicator{width:7px;height:7px;flex:none;border-radius:50%;background:var(--badge-run-fg)}
-.agent-status-indicator.attention{background:var(--badge-att-fg)}
+/* AgentWindow — while an agent works: the window's pulsing accent edge glow, the dotted field
+   (dot-grid-base dots with a lit dot-grid-active sweep, kept to the edges so text stays on a clean surface)
+   and the frosted task bar showing the current step. Values from the design system. */
+.sheet:has(.chat.agent-running)::after{box-shadow:inset 0 0 0 1px #0880f74d,inset 0 0 48px 6px #519afb40;animation:ego-agent-pulse 2.4s cubic-bezier(.42,0,.58,1) infinite}
+:root[data-theme="dark"] .sheet:has(.chat.agent-running)::after{box-shadow:inset 0 0 0 1px #519afb66,inset 0 0 56px 8px #0880f733}
+@media (prefers-color-scheme:dark){:root:not([data-theme]) .sheet:has(.chat.agent-running)::after{box-shadow:inset 0 0 0 1px #519afb66,inset 0 0 56px 8px #0880f733}}
+@keyframes ego-agent-pulse{0%,100%{opacity:.78}50%{opacity:1}}
+.chat.agent-running::before{background-image:radial-gradient(circle,var(--dot-grid-base) 1px,transparent 1.35px);background-size:10px 10px;opacity:1}
+.chat.agent-running::after{transform:none;background:radial-gradient(circle,var(--dot-grid-active) 1px,transparent 1.35px) 0 0/10px 10px;
+ -webkit-mask-image:linear-gradient(115deg,transparent 42%,#000 50%,transparent 58%),radial-gradient(ellipse 80% 70% at 50% 50%,transparent 15%,#000 100%);
+ mask-image:linear-gradient(115deg,transparent 42%,#000 50%,transparent 58%),radial-gradient(ellipse 80% 70% at 50% 50%,transparent 15%,#000 100%);
+ -webkit-mask-size:300% 100%,100% 100%;mask-size:300% 100%,100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+ -webkit-mask-composite:source-in;mask-composite:intersect;animation:ego-agent-sweep 4.6s linear infinite}
+@keyframes ego-agent-sweep{from{-webkit-mask-position:100% 0,0 0;mask-position:100% 0,0 0}to{-webkit-mask-position:0 0,0 0;mask-position:0 0,0 0}}
+.agent-status{display:inline-flex;align-items:center;gap:12px;max-width:100%;margin:8px 0 12px;padding:7px 16px 7px 12px;border-radius:26px;background:var(--bg-agent-task-bar);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#ffffff;box-shadow:0 0 0 .5px #ffffff1f,0 8px 24px #0000003d;font:500 13px/18px var(--font-sans)}
+.agent-status-indicator{width:14px;height:14px;flex:none;border-radius:50%;background:none;border:1.6px solid #ffffff3d;border-top-color:#ffffff;animation:spin .9s linear infinite}
+.agent-status-indicator.attention{animation:none;border-color:var(--yellow-6)}
 .agent-status span:last-child{min-width:0;overflow-wrap:anywhere}
+@media (prefers-reduced-motion:reduce){.sheet:has(.chat.agent-running)::after,.chat.agent-running::after,.agent-status-indicator{animation:none}}

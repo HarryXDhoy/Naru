@@ -1,105 +1,63 @@
-/* Defined: monochrome surfaces, hairline edges, vivid halftone media. */
-:root:not([data-theme]), :root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg-1:#080808;--bg-2:#000;--bg-3:#111;--bg-4:#191919;--bg-5:#262626;--bg-6:#383838;
-  --fg-1:#111;--fg-2:#1a1a1a;--fg-3:#222;--fg-4:#333;--fg-5:#444;
-  --bg-alpha-1:#ffffff08;--bg-alpha-2:#ffffff0f;--bg-alpha-3:#ffffff1f;--bg-alpha-4:#ffffff29;--bg-alpha-5:#ffffff38;--bg-alpha-6:#ffffff4d;
-  --text-0:#fff;--text-1:#fff;--text-2:#ffffffb3;--text-3:#ffffff99;--text-4:#ffffff80;--text-5:#ffffff55;
-  --accent:#fff;--accent-bg:#ffffff1a;--accent-light:#ffffff29;--accent-dark:#fff;--heading:#fff;
-  --danger:#ff9a90;--danger-bg:#461817;--page-bg:#000;--bg-window:#050505ed;--bg-window-inner:#050505;--bg-overlay:#000000cf;--bg-tooltip:#111;--bg-toast:#141414;--glass-1:#ffffff1a;
-  --badge-run-bg:#15223b;--badge-run-fg:#c9e3ff;--badge-done-bg:#153321;--badge-done-fg:#b9f1c8;--badge-att-bg:#41330f;--badge-att-fg:#ffe5a0;--badge-err-bg:#461817;--badge-err-fg:#ffc3bb;
-  --shadow-0:0 0 0 .5px #ffffff33;--shadow-1:0 0 0 1px #ffffff33;--shadow-1-1:0 0 0 1px #ffffff66;
-  --shadow-2:0 0 0 1px #ffffff33;--shadow-2-2:0 0 0 1px #ffffff33;--shadow-3:0 0 0 1px #ffffff33,0 18px 50px #000b;
-  --radius-4:2px;--radius-6:2px;--radius-8:2px;--radius-10:2px;--radius-12:2px;--radius-14:2px;--radius-16:2px;--radius-20:2px;--radius-24:2px;
-  --font-sans:Inter,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+/* Defined — the ego(lite) Style design system's monochrome theme (data-style="defined").
+   Ink at fixed alphas, 1px hairlines instead of shadows, Inter for text and Inter Tight for display.
+   Dark is white on black; light is the same system inverted, black on white. */
+:root[data-style="defined"]{
+  --font-sans:"Inter","Mona Sans",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  --t-btn-radius:var(--radius-full);--t-seg-radius:var(--radius-full);--t-seg-btn-radius:var(--radius-full);
+  --t-comp-radius:var(--radius-10);--t-card-radius:var(--radius-8);
+}
+:root[data-style="defined"][data-mode="dark"]{
+  --bg-1:#000000;--bg-2:#0a0a0a;--bg-3:#111111;--bg-4:#1a1a1a;--bg-5:#242424;--bg-6:#2e2e2e;
+  --bg-alpha-1:#ffffff08;--bg-alpha-2:#ffffff0f;--bg-alpha-3:#ffffff14;--bg-alpha-4:#ffffff1f;--bg-alpha-5:#ffffff33;--bg-alpha-6:#ffffff4d;
+  --fg-1:#141414;--fg-2:#1c1c1c;--fg-3:#262626;--fg-4:#303030;--fg-5:#3a3a3a;
+  --text-0:#ffffff;--text-1:#ffffff;--text-2:#ffffffb3;--text-3:#ffffff99;--text-4:#ffffff66;--text-5:#ffffff33;
+  --accent:#ffffff;--accent-bg:#ffffff1a;--accent-light:#ffffff;--accent-dark:#000000;
+  --danger:var(--red-4);--danger-bg:var(--red-10);--heading:#ffffff;
+  --page-bg:#000000;--bg-window:#000000e6;--bg-window-inner:#0a0a0ab3;--bg-overlay:#000000cc;--glass-1:#ffffff33;--bg-tooltip:#262626;--bg-toast:#141414;
+  --dot-grid-base:#ffffff26;--dot-grid-active:#ffffffcc;--dot-grid-bg:#00000066;
+  --shadow-0:0 0 0 .5px #ffffff33;--shadow-1:0 0 0 1px #ffffff33;--shadow-1-1:0 0 0 1px #ffffff4d;
+  --shadow-2:0 0 0 1px #ffffff33;--shadow-2-2:0 0 0 1px #ffffff33;--shadow-3:0 0 0 1px #ffffff33,0 24px 64px 0 #000000cc;
+  --shadow-card-hover:inset 0 0 0 1px #ffffff66;
+  --badge-run-bg:#ffffff1a;--badge-run-fg:#ffffff;--badge-done-bg:var(--green-10);--badge-done-fg:var(--green-2);--badge-att-bg:var(--yellow-10);--badge-att-fg:var(--yellow-2);--badge-err-bg:var(--red-10);--badge-err-fg:var(--red-2);
   --dot-side-color:#cfe2ff;--dot-side-opacity:.10;
+  --hero-surface:#000;--hero-paper:#000000;--hero-title:#fff;--hero-title-shadow:0 2px 18px #000;--hero-fine-dot:#ffffffb3;--hero-mask-center:#0009;--hero-mask-middle:#000d;
+  --t-btn-bg:#141414;--t-btn-hover:#1c1c1c;--t-btn-ring:0 0 0 1px #ffffff33;
+  --t-pri-bg:#ffffff;--t-pri-fg:#000000;--t-pri-hover:#ffffffe6;
+  --t-tint-bg:#ffffff1a;--t-tint-hover:#ffffff26;
+  --t-seg-bg:#ffffff0f;--t-seg-on:#262626;--t-seg-on-ring:0 0 0 1px #ffffff33;
+  --t-comp-ring:0 0 0 1px #ffffff33;--t-comp-focus:0 0 0 1px #ffffff;
+  --t-send-bg:#ffffff;--t-send-fg:#000000;
+  --t-inline-code:#1a1a1a;--t-code-bg:#0a0a0a;--t-code-ring:0 0 0 1px #ffffff33;
+  --t-glow:inset 0 0 0 1px #ffffff4d,inset 0 0 56px 8px #ffffff1a;
+  --t-status-bg:#000000b3;--t-status-fg:#ffffff;--t-status-ring:0 0 0 1px #ffffff33;--t-status-track:#ffffff3d;--t-status-head:#ffffff;
+  --t-sel-bg:#ffffff40;
+  color-scheme:dark;
 }
-/* The bright variant retains the same typography and hairline layout. */
-:root[data-theme="light"] {
+:root[data-style="defined"][data-mode="light"]{
+  --bg-1:#ffffff;--bg-2:#fafafa;--bg-3:#f5f5f5;--bg-4:#eeeeee;--bg-5:#e5e5e5;--bg-6:#d4d4d4;
+  --bg-alpha-1:#00000008;--bg-alpha-2:#0000000d;--bg-alpha-3:#00000014;--bg-alpha-4:#0000001a;--bg-alpha-5:#00000026;--bg-alpha-6:#00000040;
+  --fg-1:#ffffff;--fg-2:#f5f5f5;--fg-3:#eeeeee;--fg-4:#e5e5e5;--fg-5:#d4d4d4;
+  --text-0:#000000;--text-1:#000000;--text-2:#000000b3;--text-3:#00000099;--text-4:#00000066;--text-5:#00000033;
+  --accent:#000000;--accent-bg:#0000000d;--accent-light:#0000001a;--accent-dark:#000000;
+  --danger:var(--red-5);--danger-bg:var(--red-1);--heading:#000000;
+  --page-bg:#ffffff;--bg-window:#ffffffe6;--bg-window-inner:#fafafa;--bg-overlay:#ffffffcc;--glass-1:#ffffff80;--bg-tooltip:#000000;--bg-toast:#000000;
+  --dot-grid-base:#00000026;--dot-grid-active:#000000b3;--dot-grid-bg:#ffffff66;
+  --shadow-0:0 0 0 .5px #00000026;--shadow-1:0 0 0 1px #00000026;--shadow-1-1:0 0 0 1px #00000040;
+  --shadow-2:0 0 0 1px #00000026;--shadow-2-2:0 0 0 1px #00000026;--shadow-3:0 0 0 1px #00000026,0 24px 64px 0 #00000026;
+  --shadow-card-hover:inset 0 0 0 1px #00000066;
+  --badge-run-bg:#0000000d;--badge-run-fg:#000000;--badge-done-bg:var(--green-1);--badge-done-fg:var(--green-8);--badge-att-bg:var(--yellow-1);--badge-att-fg:var(--yellow-8);--badge-err-bg:var(--red-1);--badge-err-fg:var(--red-8);
+  --dot-side-color:#000000;--dot-side-opacity:.05;
+  --hero-surface:#ffffff;--hero-paper:#ffffff;--hero-title:#000;--hero-title-shadow:0 2px 18px #fff;--hero-fine-dot:#00000040;--hero-mask-center:#0002;--hero-mask-middle:#000a;
+  --t-btn-bg:#ffffff;--t-btn-hover:#f5f5f5;--t-btn-ring:0 0 0 1px #00000026;
+  --t-pri-bg:#000000;--t-pri-fg:#ffffff;--t-pri-hover:#000000d9;
+  --t-tint-bg:#0000000d;--t-tint-hover:#0000001a;
+  --t-seg-bg:#0000000d;--t-seg-on:#ffffff;--t-seg-on-ring:0 0 0 1px #00000026;
+  --t-comp-ring:0 0 0 1px #00000026;--t-comp-focus:0 0 0 1px #000000;
+  --t-send-bg:#000000;--t-send-fg:#ffffff;
+  --t-inline-code:#eeeeee;--t-code-bg:#fafafa;--t-code-ring:0 0 0 1px #00000026;
+  --t-glow:inset 0 0 0 1px #0000004d,inset 0 0 56px 8px #0000000d;
+  --t-status-bg:#ffffffe6;--t-status-fg:#000000;--t-status-ring:0 0 0 1px #00000026;--t-status-track:#00000026;--t-status-head:#000000;
+  --t-sel-bg:#00000026;
   color-scheme:light;
-  --bg-1:#fff;--bg-2:#f2f2f2;--bg-3:#f4f4f4;--bg-4:#eaeaea;--bg-5:#ddd;--bg-6:#aaa;
-  --fg-1:#fff;--fg-2:#f1f1f1;--fg-3:#e6e6e6;--fg-4:#ddd;--fg-5:#ccc;
-  --bg-alpha-1:#00000008;--bg-alpha-2:#0000000d;--bg-alpha-3:#0000001f;--bg-alpha-4:#00000029;--bg-alpha-5:#00000038;--bg-alpha-6:#0000004d;
-  --text-0:#000;--text-1:#101010;--text-2:#000b;--text-3:#0009;--text-4:#0008;--text-5:#0005;
-  --accent:#141414;--accent-bg:#0000000d;--accent-light:#00000014;--accent-dark:#111;--heading:#111;
-  --danger:#a6221b;--danger-bg:#ffebe8;--page-bg:#eee;--bg-window:#f7f7f7ed;--bg-window-inner:#f2f2f2;--bg-overlay:#00000099;--bg-tooltip:#111;--bg-toast:#111;--glass-1:#ffffff26;
-  --badge-run-bg:#e5f1ff;--badge-run-fg:#144479;--badge-done-bg:#dff3e4;--badge-done-fg:#155b29;--badge-att-bg:#fff2cd;--badge-att-fg:#755308;--badge-err-bg:#ffe7e3;--badge-err-fg:#a1201b;
-  --shadow-0:0 0 0 .5px #0003;--shadow-1:0 0 0 1px #0003;--shadow-1-1:0 0 0 1px #0006;
-  --shadow-2:0 0 0 1px #0003;--shadow-2-2:0 0 0 1px #0003;--shadow-3:0 0 0 1px #0003,0 18px 50px #0003;
-  --radius-4:2px;--radius-6:2px;--radius-8:2px;--radius-10:2px;--radius-12:2px;--radius-14:2px;--radius-16:2px;--radius-20:2px;--radius-24:2px;
-  --font-sans:Inter,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
-  --dot-side-color:#152256;--dot-side-opacity:.055;
 }
-/* Honor system mode as well as explicit brightness choices. */
-@media (prefers-color-scheme:light) {
- :root:not([data-theme]){
-  color-scheme:light;--bg-1:#fff;--bg-2:#f2f2f2;--bg-3:#f4f4f4;--bg-4:#eaeaea;--bg-5:#ddd;--bg-6:#aaa;
-  --fg-1:#fff;--fg-2:#f1f1f1;--fg-3:#e6e6e6;--fg-4:#ddd;--fg-5:#ccc;
-  --bg-alpha-1:#00000008;--bg-alpha-2:#0000000d;--bg-alpha-3:#0000001f;--bg-alpha-4:#00000029;--bg-alpha-5:#00000038;--bg-alpha-6:#0000004d;
-  --text-0:#000;--text-1:#101010;--text-2:#000b;--text-3:#0009;--text-4:#0008;--text-5:#0005;
-  --accent:#141414;--accent-bg:#0000000d;--accent-light:#00000014;--accent-dark:#111;--heading:#111;--danger:#a6221b;--danger-bg:#ffebe8;
-  --page-bg:#eee;--bg-window:#f7f7f7ed;--bg-window-inner:#f2f2f2;--bg-overlay:#00000099;--glass-1:#ffffff26;
-  --badge-run-bg:#e5f1ff;--badge-run-fg:#144479;--badge-done-bg:#dff3e4;--badge-done-fg:#155b29;--badge-att-bg:#fff2cd;--badge-att-fg:#755308;--badge-err-bg:#ffe7e3;--badge-err-fg:#a1201b;
-  --shadow-0:0 0 0 .5px #0003;--shadow-1:0 0 0 1px #0003;--shadow-1-1:0 0 0 1px #0006;--shadow-2:0 0 0 1px #0003;--shadow-2-2:0 0 0 1px #0003;--shadow-3:0 0 0 1px #0003,0 18px 50px #0003;
-  --dot-side-color:#152256;--dot-side-opacity:.055;
- }
-}
-body{letter-spacing:0}
-.side{border-right:1px solid var(--bg-alpha-3)}
-.sheet{margin:0;border-radius:0;box-shadow:none}
-.app.no-side .sheet{margin-left:0}
-.top{box-shadow:inset 0 -1px var(--bg-alpha-3)}
-.top-title,.icon-btn,.chip,.seg,.seg button,.btn,.file-chip,.presets button,.badge,.palette-box,.pop,.toast{border-radius:2px}
-.btn{box-shadow:inset 0 0 0 1px var(--bg-alpha-5);background:transparent}
-.btn:hover{background:var(--bg-alpha-2)}
-.btn.primary{background:var(--text-0);color:var(--bg-2);box-shadow:none}
-.btn.primary:hover{background:var(--text-2);color:var(--bg-2)}
-.btn.tint{color:var(--text-1);background:var(--bg-alpha-3)}
-.btn.tint:hover{background:var(--bg-alpha-4)}
-.item .glyph.live{background:var(--text-0);color:var(--bg-2)}
-.page-head h1{font-size:32px;line-height:1.1;letter-spacing:-.03em}
-.page h2{color:var(--text-1)}
-.panel,.approve,.notice,.composer,dialog,.pop,.palette-box,.code,.md .table{box-shadow:var(--shadow-1)}
-.composer{background:var(--bg-1)}
-.composer:focus-within,.chat.empty .composer:focus-within{box-shadow:0 0 0 1px var(--text-1)}
-.u .bubble{border:1px solid var(--bg-alpha-3)}
-.hero{background:#000}
-.hero canvas{opacity:.13;mix-blend-mode:screen}
-/* Defined halftone on the shared Naru dot grid: colour fields seen only through the 7px dots, faint in the centre, strongest at the edges. */
-:root{--fluid-ultramarine:#1f3dff;--fluid-cyan:#29c8ff;--fluid-lime:#b8f53a;--fluid-amber:#ffa41f;--fluid-magenta:#ff3fd2}
-.hero::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
- background:
-  radial-gradient(34% 44% at 4% 24%,var(--fluid-magenta) 0 22%,transparent 70%),
-  radial-gradient(29% 34% at 28% 6%,var(--fluid-lime) 0 22%,transparent 70%),
-  radial-gradient(39% 44% at 66% 12%,var(--fluid-ultramarine) 0 22%,transparent 72%),
-  radial-gradient(26% 34% at 76% 24%,var(--fluid-cyan) 0 22%,transparent 70%),
-  radial-gradient(29% 39% at 100% 8%,var(--fluid-magenta) 0 22%,transparent 70%),
-  radial-gradient(39% 44% at 94% 88%,var(--fluid-ultramarine) 0 22%,transparent 72%),
-  radial-gradient(26% 31% at 82% 70%,var(--fluid-cyan) 0 22%,transparent 70%),
-  radial-gradient(34% 36% at 10% 86%,var(--fluid-amber) 0 22%,transparent 70%),
-  radial-gradient(26% 31% at 32% 96%,var(--fluid-magenta) 0 22%,transparent 70%);
- -webkit-mask-image:radial-gradient(circle,#000 var(--dot-radius),transparent calc(var(--dot-radius) + .35px)),radial-gradient(ellipse 56% 54% at 50% 45%,#0000 0%,#0006 45%,#000 100%);
- mask-image:radial-gradient(circle,#000 var(--dot-radius),transparent calc(var(--dot-radius) + .35px)),radial-gradient(ellipse 56% 54% at 50% 45%,#0000 0%,#0006 45%,#000 100%);
- -webkit-mask-size:var(--dot-grid) var(--dot-grid),100% 100%;mask-size:var(--dot-grid) var(--dot-grid),100% 100%;
- -webkit-mask-repeat:repeat,no-repeat;mask-repeat:repeat,no-repeat;
- -webkit-mask-composite:source-in;mask-composite:intersect}
-.hero::after{z-index:2;opacity:.12}
-.hero-title{z-index:3;color:#fff;font-size:clamp(30px,4vw,48px);font-weight:600;letter-spacing:-.035em;text-shadow:0 2px 18px #000}
-.sheet:has(.chat.empty) .top .icon-btn{color:#fff}
-.chat.empty .composer{background:var(--bg-1);box-shadow:var(--shadow-1),0 12px 40px #0008}
-.sheet:has(.chat.agent-running)::after{box-shadow:inset 0 0 0 1px #ffffff80,inset 0 0 28px -14px #719dff}
-.chat.agent-running::before{background-image:radial-gradient(circle,#74aaff var(--dot-radius),transparent calc(var(--dot-radius) + .35px));opacity:.13}
-:focus-visible{outline:2px solid var(--text-1);outline-offset:2px}
-@media(max-width:760px){.side{border-right:1px solid var(--bg-alpha-3)}.page-head h1{font-size:27px}.hero-title{font-size:30px}}
-
-/* Preserve legibility of inherited controls across both contrast variants. */
-::selection{background:var(--text-1);color:var(--bg-1)}
-[data-theme="dark"] ::selection{background:var(--text-1);color:var(--bg-1)}
-.icon-btn .count{background:var(--text-1);color:var(--bg-1)}
-.switch[aria-checked="true"]::after{background:var(--bg-2)}
-.md a{text-decoration:underline;text-underline-offset:3px}
-::-webkit-scrollbar-thumb{background:var(--bg-6);border:3px solid transparent;background-clip:padding-box}
-@media (max-width:760px){
- .sheet,.app.no-side .sheet{border-radius:0}
- .page-in{padding-left:20px;padding-right:20px}
-}
+:root[data-style="defined"] .page-head h1{font-family:var(--font-display);letter-spacing:-.03em}

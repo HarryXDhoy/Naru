@@ -1,0 +1,79 @@
+/* Cursor — data-style="cursor", from design/DESIGN-cursor.md: warm canvas, warm ink, one Cursor Orange
+   for primary actions, hairline-only depth, 8px controls / 12px cards, display at weight 400,
+   JetBrains Mono on every code surface, and the pastel timeline palette kept to agent steps.
+   Light is the cream page from the file; dark keeps the same warm hue at night. Inter stands in for CursorGothic. */
+@font-face{font-family:"JetBrains Mono";src:url("/fonts/jetbrains-mono.woff2") format("woff2");font-weight:100 800;font-style:normal;font-display:swap}
+
+:root[data-style="cursor"]{
+  --font-sans:"Inter","Mona Sans",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
+  --font-display:var(--font-sans);
+  --font-mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,monospace;
+  --tl-thinking:#dfa88f;--tl-grep:#9fc9a2;--tl-read:#9fbbe0;--tl-edit:#c0a8dd;--tl-done:#c08532;
+  --t-btn-radius:var(--radius-8);--t-seg-radius:var(--radius-8);--t-seg-btn-radius:var(--radius-6);
+  --t-comp-radius:var(--radius-12);--t-card-radius:var(--radius-12);
+  --t-pri-bg:#f54e00;--t-pri-fg:#ffffff;--t-pri-hover:#e64900;--t-pri-active:#d04200;
+  --t-send-bg:#f54e00;--t-send-fg:#ffffff;
+  --fluid-ultramarine:#f54e00;--fluid-cyan:#9fbbe0;--fluid-lime:#9fc9a2;--fluid-amber:#dfa88f;--fluid-magenta:#c0a8dd;
+  --badge-run-bg:var(--tl-thinking);--badge-run-fg:#26251e;--badge-done-bg:var(--tl-done);--badge-done-fg:#ffffff;
+}
+:root[data-style="cursor"][data-mode="light"]{
+  --bg-1:#ffffff;--bg-2:#f7f7f4;--bg-3:#fafaf7;--bg-4:#efeee8;--bg-5:#e6e5e0;--bg-6:#cfcdc4;
+  --bg-alpha-1:#26251e05;--bg-alpha-2:#26251e0a;--bg-alpha-3:#26251e0f;--bg-alpha-4:#26251e14;--bg-alpha-5:#26251e1a;--bg-alpha-6:#26251e1f;
+  --fg-1:#ffffff;--fg-2:#fafaf7;--fg-3:#efeee8;--fg-4:#e6e5e0;--fg-5:#cfcdc4;
+  --text-0:#26251e;--text-1:#26251e;--text-2:#5a5852;--text-3:#807d72;--text-4:#a09c92;--text-5:#cfcdc4;
+  --accent:#f54e00;--accent-bg:#fdeee6;--accent-light:#fbd5c2;--accent-dark:#d04200;
+  --danger:#cf2d56;--danger-bg:#fbe4ea;--heading:#26251e;
+  --page-bg:#efeee8;--bg-window:#f7f7f4e6;--bg-window-inner:#f7f7f4;--bg-overlay:#f7f7f4cc;--bg-tooltip:#26251e;--bg-toast:#26251e;--glass-1:#ffffff80;
+  --badge-att-bg:#f6e7b8;--badge-att-fg:#6b4a00;--badge-err-bg:#fbe4ea;--badge-err-fg:#a3203f;
+  --shadow-0:0 0 0 .5px #e6e5e0;--shadow-1:0 0 0 1px #e6e5e0;--shadow-1-1:0 0 0 1px #cfcdc4;
+  --shadow-2:0 0 0 1px #e6e5e0;--shadow-2-2:0 0 0 1px #e6e5e0;--shadow-3:0 0 0 1px #cfcdc4;--shadow-card-hover:0 0 0 1px #cfcdc4;
+  --dot-grid-base:#26251e1f;--dot-grid-active:#f54e00b3;--dot-grid-bg:#f7f7f466;--dot-side-color:#26251e;--dot-side-opacity:.04;
+  --hero-surface:#f7f7f4;--hero-paper:#f7f7f4;--hero-title:#26251e;--hero-title-shadow:0 2px 18px #f7f7f4;--hero-fine-dot:#26251e40;--hero-mask-center:#0002;--hero-mask-middle:#000a;
+  --t-btn-bg:#ffffff;--t-btn-hover:#fafaf7;--t-btn-ring:0 0 0 1px #cfcdc4;
+  --t-tint-bg:#efeee8;--t-tint-hover:#e6e5e0;
+  --t-seg-bg:#efeee8;--t-seg-on:#ffffff;--t-seg-on-ring:0 0 0 1px #e6e5e0;
+  --t-comp-ring:0 0 0 1px #cfcdc4;--t-comp-focus:0 0 0 1px #f54e00;
+  --t-inline-code:#efeee8;--t-code-bg:#ffffff;--t-code-ring:0 0 0 1px #e6e5e0;
+  --t-glow:inset 0 0 0 1px #f54e0059,inset 0 0 48px 4px #f54e0014;
+  --t-status-bg:#ffffff;--t-status-fg:#26251e;--t-status-ring:0 0 0 1px #e6e5e0;--t-status-track:#dfa88f66;--t-status-head:#f54e00;
+  --t-sel-bg:#fbd5c2;--t-step-bg:#efeee8;
+  color-scheme:light;
+}
+:root[data-style="cursor"][data-mode="dark"]{
+  --bg-1:#26251f;--bg-2:#1c1b17;--bg-3:#201f1a;--bg-4:#161511;--bg-5:#33322b;--bg-6:#47453c;
+  --bg-alpha-1:#f7f7f405;--bg-alpha-2:#f7f7f40a;--bg-alpha-3:#f7f7f40f;--bg-alpha-4:#f7f7f414;--bg-alpha-5:#f7f7f41a;--bg-alpha-6:#f7f7f424;
+  --fg-1:#2c2b25;--fg-2:#33322b;--fg-3:#3b3a32;--fg-4:#47453c;--fg-5:#5a5852;
+  --text-0:#f7f7f4;--text-1:#edebe4;--text-2:#b9b6ab;--text-3:#8c897e;--text-4:#66645b;--text-5:#47453c;
+  --accent:#ff6a26;--accent-bg:#f54e0026;--accent-light:#f54e0040;--accent-dark:#ff9a66;
+  --danger:#f0648a;--danger-bg:#cf2d5633;--heading:#f7f7f4;
+  --page-bg:#161511;--bg-window:#1c1b17e6;--bg-window-inner:#1c1b17;--bg-overlay:#000000b3;--bg-tooltip:#33322b;--bg-toast:#33322b;--glass-1:#f7f7f40f;
+  --badge-att-bg:#6b4a0066;--badge-att-fg:#f6d98a;--badge-err-bg:#cf2d5633;--badge-err-fg:#f59ab2;
+  --shadow-0:0 0 0 .5px #33322b;--shadow-1:0 0 0 1px #33322b;--shadow-1-1:0 0 0 1px #47453c;
+  --shadow-2:0 0 0 1px #33322b;--shadow-2-2:0 0 0 1px #33322b;--shadow-3:0 0 0 1px #47453c,0 24px 64px #00000099;--shadow-card-hover:0 0 0 1px #5a5852;
+  --dot-grid-base:#f7f7f41a;--dot-grid-active:#ff6a26b3;--dot-grid-bg:#1c1b1766;--dot-side-color:#f7f7f4;--dot-side-opacity:.05;
+  --hero-surface:#1c1b17;--hero-paper:#1c1b17;--hero-title:#f7f7f4;--hero-title-shadow:0 2px 18px #1c1b17;--hero-fine-dot:#f7f7f459;--hero-mask-center:#0009;--hero-mask-middle:#000d;
+  --t-btn-bg:#26251f;--t-btn-hover:#2c2b25;--t-btn-ring:0 0 0 1px #47453c;
+  --t-tint-bg:#33322b;--t-tint-hover:#3b3a32;
+  --t-seg-bg:#161511;--t-seg-on:#33322b;--t-seg-on-ring:0 0 0 1px #47453c;
+  --t-comp-ring:0 0 0 1px #47453c;--t-comp-focus:0 0 0 1px #f54e00;
+  --t-inline-code:#33322b;--t-code-bg:#161511;--t-code-ring:0 0 0 1px #33322b;
+  --t-glow:inset 0 0 0 1px #f54e0066,inset 0 0 56px 6px #f54e001f;
+  --t-status-bg:#26251f;--t-status-fg:#edebe4;--t-status-ring:0 0 0 1px #47453c;--t-status-track:#dfa88f4d;--t-status-head:#ff6a26;
+  --t-sel-bg:#f54e0059;--t-step-bg:#33322b;
+  color-scheme:dark;
+}
+:root[data-style="cursor"] body{letter-spacing:-.005em}
+:root[data-style="cursor"] .hero-title{font-weight:400;letter-spacing:-.03em}
+:root[data-style="cursor"] .page-head h1{font-weight:400;font-size:26px;letter-spacing:-.0125em}
+:root[data-style="cursor"] h2{font-weight:600}
+
+/* Agent timeline: each step's glyph sits in its stage colour. */
+:root[data-style="cursor"] .step .g{width:22px;height:22px;border-radius:var(--radius-full);color:#26251e;background:var(--t-step-bg)}
+:root[data-style="cursor"][data-mode="dark"] .step .g{color:#edebe4}
+:root[data-style="cursor"] .step .g svg{width:13px;height:13px}
+:root[data-style="cursor"] .step:has(.spinner) .g{background:var(--tl-thinking);color:#26251e}
+:root[data-style="cursor"] .step[data-icon="search"] .g{background:var(--tl-grep);color:#26251e}
+:root[data-style="cursor"] .step[data-icon="eye"] .g,:root[data-style="cursor"] .step[data-icon="folder"] .g,:root[data-style="cursor"] .step[data-icon="globe"] .g{background:var(--tl-read);color:#26251e}
+:root[data-style="cursor"] .step[data-icon="pen"] .g,:root[data-style="cursor"] .step[data-icon="doc"] .g{background:var(--tl-edit);color:#26251e}
+:root[data-style="cursor"] .step[data-icon="check"] .g{background:var(--tl-done);color:#ffffff}
+:root[data-style="cursor"] .step.err .g{background:var(--danger-bg);color:var(--danger)}

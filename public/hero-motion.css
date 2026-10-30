@@ -1,3 +1,9 @@
+/* First screen: the Defined HalftoneField in every theme, with the static halftone artwork as its fallback
+   and the fine 7px dot grid above it. */
+.hero{background:#000}
+.hero canvas{opacity:.13;mix-blend-mode:screen}
+.hero::after{z-index:2;opacity:.12}
+.hero-title{z-index:3;font-size:clamp(30px,4vw,48px);font-weight:600;letter-spacing:-.035em}
 .hero::before{content:none}
 .hero-pattern{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;
  mask-image:radial-gradient(ellipse 48% 48% at 50% 43%,#0006 0%,#000d 65%,#000 100%);
@@ -7,7 +13,6 @@
 @keyframes naru-sea-drift{from{transform:translate3d(-2%,-1%,0)}to{transform:translate3d(2%,1%,0)}}
 .page-hidden .hero-pattern span{animation-play-state:paused}
 @media (prefers-reduced-motion:reduce){.hero-pattern span{animation:none;transform:none}}
-/* The cached ego(lite) HalftoneField replaces the static fallback when WebGL is available. */
 .hero.live canvas{opacity:1;mix-blend-mode:normal;mask-image:radial-gradient(ellipse 50% 50% at 50% 36%,var(--hero-mask-center) 0%,var(--hero-mask-middle) 60%,#000 100%);-webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 36%,var(--hero-mask-center) 0%,var(--hero-mask-middle) 60%,#000 100%)}
 .hero.live .hero-pattern{display:none}
 :root{--hero-surface:#000;--hero-title:#fff;--hero-title-shadow:0 2px 18px #000;--hero-fine-dot:#ffffffb3;--hero-mask-center:#0009;--hero-mask-middle:#000d}
@@ -17,3 +22,4 @@
 .hero::after{background-image:radial-gradient(circle,var(--hero-fine-dot) var(--dot-radius),transparent calc(var(--dot-radius) + .35px))}
 .hero-title{color:var(--hero-title);text-shadow:var(--hero-title-shadow)}
 .sheet:has(.chat.empty) .top .icon-btn{color:var(--hero-title)}
+@media(max-width:760px){.hero-title{font-size:30px}}

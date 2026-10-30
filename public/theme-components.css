@@ -1,0 +1,35 @@
+/* Shared component skin for the named themes (data-style="defined|cursor|vercel|raycast").
+   Each theme file sets these tokens twice — once for data-mode="light", once for data-mode="dark" —
+   and the existing components read them here. Naru's own theme (no data-style) keeps styles.css as is. */
+:root[data-style] .btn{border-radius:var(--t-btn-radius);background:var(--t-btn-bg);color:var(--text-1);box-shadow:var(--t-btn-ring)}
+:root[data-style] .btn:hover{background:var(--t-btn-hover)}
+:root[data-style] .btn.primary{border-radius:var(--t-pri-radius,var(--t-btn-radius));background:var(--t-pri-bg);color:var(--t-pri-fg);box-shadow:none}
+:root[data-style] .btn.primary:hover{background:var(--t-pri-hover)}
+:root[data-style] .btn.primary:active{background:var(--t-pri-active,var(--t-pri-hover))}
+:root[data-style] .btn.tint{background:var(--t-tint-bg);color:var(--text-1);box-shadow:none}
+:root[data-style] .btn.tint:hover{background:var(--t-tint-hover)}
+:root[data-style] .btn.ghost{background:transparent;box-shadow:none}
+:root[data-style] .btn.ghost:hover{background:var(--bg-alpha-3)}
+:root[data-style] .btn.danger{background:var(--danger-bg);color:var(--danger);box-shadow:none}
+:root[data-style] .seg{border-radius:var(--t-seg-radius);background:var(--t-seg-bg);box-shadow:var(--t-seg-ring,none)}
+:root[data-style] .seg button{border-radius:var(--t-seg-btn-radius)}
+:root[data-style] .seg button[aria-pressed="true"]{background:var(--t-seg-on);color:var(--text-1);box-shadow:var(--t-seg-on-ring)}
+:root[data-style] .icon-btn .count{color:var(--t-pri-fg)}
+:root[data-style] ::selection{background:var(--t-sel-bg);color:var(--text-0)}
+
+:root[data-style] .chat .composer{border-radius:var(--t-comp-radius);background:var(--bg-1);box-shadow:var(--t-comp-ring)}
+:root[data-style] .chat .composer:focus-within{box-shadow:var(--t-comp-focus)}
+:root[data-style] .chat .composer.drag{box-shadow:var(--t-comp-focus)}
+:root[data-style] .composer .send:not(:disabled):not(.stop){background:var(--t-send-bg);color:var(--t-send-fg)}
+:root[data-style] input:focus,:root[data-style] textarea:focus,:root[data-style] select:focus{box-shadow:var(--t-comp-focus)}
+:root[data-style] .chat .composer textarea:focus{box-shadow:none}
+
+:root[data-style] .md code{background:var(--t-inline-code)}
+:root[data-style] .code{background:var(--t-code-bg);box-shadow:var(--t-code-ring);border-radius:var(--t-card-radius)}
+:root[data-style] .design-grid .item{border-radius:var(--t-card-radius)}
+:root[data-style] .design-grid .item:hover{transform:none}
+:root[data-style] .item .glyph.live{background:var(--t-pri-bg);color:var(--t-pri-fg)}
+
+:root[data-style] .sheet:has(.chat.agent-running)::after{box-shadow:var(--t-glow)}
+:root[data-style] .agent-status{background:var(--t-status-bg);color:var(--t-status-fg);box-shadow:var(--t-status-ring)}
+:root[data-style] .agent-status-indicator{border-color:var(--t-status-track);border-top-color:var(--t-status-head)}

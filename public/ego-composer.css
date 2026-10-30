@@ -1,29 +1,14 @@
-.chat .composer {
-  border-radius:14px;
-  padding:14px 14px 12px;
-  gap:10px;
-  box-shadow:0 0 0 1px var(--bg-alpha-4),0 8px 28px #00000014;
-}
-.chat .composer:focus-within,
-.chat.empty .composer:focus-within {
-  box-shadow:0 0 0 1px var(--text-2),0 8px 28px #00000014;
-}
-.chat.empty .composer { box-shadow:0 0 0 1px var(--bg-alpha-4),0 14px 36px #00000038; }
-.chat .composer.drag { box-shadow:0 0 0 2px var(--text-2),0 8px 28px #00000014; }
-.composer textarea { min-height:48px;padding:1px 3px;font-size:15px;line-height:22px; }
-.composer textarea::placeholder { color:var(--text-3); }
-.composer .tools { gap:4px;margin-left:0; }
-.composer .tools > .icon-btn { width:32px;height:32px;border-radius:50%; }
-.composer .chip { min-height:32px;padding:5px 10px;border-radius:999px; }
-.composer .chip.on { color:var(--text-1);background:var(--bg-alpha-4); }
-.composer .chip.on svg { color:var(--text-1); }
-.composer .seg { border-radius:999px;padding:3px;background:var(--bg-alpha-2); }
-.composer .seg button { min-height:27px;padding:4px 11px;border-radius:999px; }
-.composer .seg button[aria-pressed="true"] { background:var(--fg-2);box-shadow:var(--shadow-1); }
-.composer .send { width:32px;height:32px; }
-.message-queue { border-radius:14px; }
-@media(max-width:640px) {
-  .chat .composer { padding:12px;gap:8px; }
-  .composer .chip { padding-left:8px;padding-right:8px; }
-  .composer .seg button { padding-left:9px;padding-right:9px; }
-}
+/* Composer — ego(lite) Composer: bg-1, radius-10, shadow-2, 12px padding, 14/20 text, text-4 placeholder,
+   a 1px accent ring on focus and a 28px round send button. The access and queue rows follow the same metrics. */
+.chat .composer{border-radius:var(--radius-10);padding:var(--space-12);gap:var(--space-8);background:var(--bg-1);box-shadow:var(--shadow-2)}
+.chat .composer:focus-within{box-shadow:0 0 0 1px var(--accent),var(--shadow-2)}
+.chat.empty .composer{box-shadow:var(--shadow-3)}
+.chat.empty .composer:focus-within{box-shadow:0 0 0 1px var(--accent),var(--shadow-3)}
+.chat .composer.drag{box-shadow:0 0 0 2px var(--accent),var(--shadow-2)}
+.composer textarea{min-height:40px;padding:0 2px;font:400 14px/20px var(--font-sans)}
+.composer textarea::placeholder{color:var(--text-4)}
+.composer .send{width:28px;height:28px}
+.message-queue{border-radius:var(--radius-10);box-shadow:var(--shadow-1)}
+/* The fade above the dock must sit under the composer, or it washes out the top edge of the ring. */
+.dock::before{z-index:0}
+.chat .composer{position:relative;z-index:1}

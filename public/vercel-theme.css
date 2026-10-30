@@ -1,0 +1,69 @@
+/* Vercel — data-style="vercel", from design/DESIGN-vercel.md (the Geist system): one ink for headings,
+   primary actions and borders, hairline borders, 6px square controls in app chrome, Geist Sans tightly
+   tracked and Geist Mono on code. The only colour is the link blue; the mesh gradient stays on the first screen.
+   Light is near-white with #171717 ink; dark is Geist's #0a0a0a with #ededed ink. */
+@font-face{font-family:"Geist";src:url("/fonts/geist.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("/fonts/geist-mono.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+
+:root[data-style="vercel"]{
+  --font-sans:"Geist","Mona Sans",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",Arial,sans-serif;
+  --font-display:var(--font-sans);
+  --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --t-btn-radius:var(--radius-6);--t-seg-radius:var(--radius-6);--t-seg-btn-radius:4px;
+  --t-comp-radius:var(--radius-12);--t-card-radius:var(--radius-12);
+  --fluid-ultramarine:#007cf0;--fluid-cyan:#00dfd8;--fluid-lime:#7928ca;--fluid-amber:#f9cb28;--fluid-magenta:#ff0080;
+}
+:root[data-style="vercel"][data-mode="light"]{
+  --bg-1:#ffffff;--bg-2:#fafafa;--bg-3:#fafafa;--bg-4:#f2f2f2;--bg-5:#ebebeb;--bg-6:#a1a1a1;
+  --bg-alpha-1:#17171705;--bg-alpha-2:#1717170a;--bg-alpha-3:#1717170f;--bg-alpha-4:#17171714;--bg-alpha-5:#1717171a;--bg-alpha-6:#1717171f;
+  --fg-1:#ffffff;--fg-2:#fafafa;--fg-3:#f2f2f2;--fg-4:#ebebeb;--fg-5:#a1a1a1;
+  --text-0:#171717;--text-1:#171717;--text-2:#4d4d4d;--text-3:#8f8f8f;--text-4:#a1a1a1;--text-5:#ebebeb;
+  --accent:#0070f3;--accent-bg:#eaf3ff;--accent-light:#d3e5ff;--accent-dark:#0761d1;
+  --danger:#ee0000;--danger-bg:#ffe8e8;--heading:#171717;
+  --page-bg:#f2f2f2;--bg-window:#fafafae6;--bg-window-inner:#fafafa;--bg-overlay:#fafafacc;--bg-tooltip:#171717;--bg-toast:#171717;--glass-1:#ffffff80;
+  --badge-run-bg:#d3e5ff;--badge-run-fg:#0761d1;--badge-done-bg:#f2f2f2;--badge-done-fg:#171717;--badge-att-bg:#ffefcf;--badge-att-fg:#ab570a;--badge-err-bg:#ffe8e8;--badge-err-fg:#c50000;
+  --shadow-0:0 0 0 .5px #ebebeb;--shadow-1:0 0 0 1px #ebebeb;--shadow-1-1:0 0 0 1px #a1a1a1;
+  --shadow-2:0 0 0 1px #ebebeb,0 1px 2px #0000000a;--shadow-2-2:0 0 0 1px #ebebeb,0 4px 8px #0000000a;--shadow-3:0 0 0 1px #ebebeb,0 16px 32px -8px #0000001f;--shadow-card-hover:0 0 0 1px #a1a1a1;
+  --dot-grid-base:#1717171a;--dot-grid-active:#0070f3b3;--dot-grid-bg:#fafafa66;--dot-side-color:#171717;--dot-side-opacity:.04;
+  --hero-surface:#fafafa;--hero-paper:#fafafa;--hero-title:#171717;--hero-title-shadow:0 2px 18px #fafafa;--hero-fine-dot:#17171740;--hero-mask-center:#0002;--hero-mask-middle:#000a;
+  --t-btn-bg:#ffffff;--t-btn-hover:#f2f2f2;--t-btn-ring:0 0 0 1px #ebebeb;
+  --t-pri-bg:#171717;--t-pri-fg:#ffffff;--t-pri-hover:#383838;
+  --t-tint-bg:#f2f2f2;--t-tint-hover:#ebebeb;
+  --t-seg-bg:#f2f2f2;--t-seg-on:#ffffff;--t-seg-on-ring:0 0 0 1px #ebebeb;
+  --t-comp-ring:0 0 0 1px #ebebeb,0 4px 8px #0000000a;--t-comp-focus:0 0 0 1px #a1a1a1,0 0 0 4px #1717170f;
+  --t-send-bg:#171717;--t-send-fg:#ffffff;
+  --t-inline-code:#f2f2f2;--t-code-bg:#ffffff;--t-code-ring:0 0 0 1px #ebebeb;
+  --t-glow:inset 0 0 0 1px #0070f34d,inset 0 0 48px 4px #0070f314;
+  --t-status-bg:#ffffff;--t-status-fg:#171717;--t-status-ring:0 0 0 1px #ebebeb,0 4px 8px #0000000a;--t-status-track:#ebebeb;--t-status-head:#171717;
+  --t-sel-bg:#d3e5ff;
+  color-scheme:light;
+}
+:root[data-style="vercel"][data-mode="dark"]{
+  --bg-1:#111111;--bg-2:#0a0a0a;--bg-3:#0f0f0f;--bg-4:#000000;--bg-5:#1f1f1f;--bg-6:#454545;
+  --bg-alpha-1:#ffffff05;--bg-alpha-2:#ffffff0a;--bg-alpha-3:#ffffff0f;--bg-alpha-4:#ffffff14;--bg-alpha-5:#ffffff1a;--bg-alpha-6:#ffffff24;
+  --fg-1:#1a1a1a;--fg-2:#1f1f1f;--fg-3:#292929;--fg-4:#2e2e2e;--fg-5:#454545;
+  --text-0:#ffffff;--text-1:#ededed;--text-2:#a1a1a1;--text-3:#878787;--text-4:#5c5c5c;--text-5:#2e2e2e;
+  --accent:#3291ff;--accent-bg:#0070f326;--accent-light:#0070f340;--accent-dark:#7cbcff;
+  --danger:#ff6166;--danger-bg:#ee000026;--heading:#ededed;
+  --page-bg:#000000;--bg-window:#0a0a0ae6;--bg-window-inner:#0a0a0a;--bg-overlay:#000000b3;--bg-tooltip:#1f1f1f;--bg-toast:#1f1f1f;--glass-1:#ffffff0f;
+  --badge-run-bg:#0070f326;--badge-run-fg:#7cbcff;--badge-done-bg:#1f1f1f;--badge-done-fg:#ededed;--badge-att-bg:#f5a62326;--badge-att-fg:#f5c06a;--badge-err-bg:#ee000026;--badge-err-fg:#ff8a8e;
+  --shadow-0:0 0 0 .5px #2e2e2e;--shadow-1:0 0 0 1px #2e2e2e;--shadow-1-1:0 0 0 1px #454545;
+  --shadow-2:0 0 0 1px #2e2e2e;--shadow-2-2:0 0 0 1px #2e2e2e;--shadow-3:0 0 0 1px #2e2e2e,0 16px 32px -8px #000000b3;--shadow-card-hover:0 0 0 1px #454545;
+  --dot-grid-base:#ffffff1a;--dot-grid-active:#3291ffb3;--dot-grid-bg:#0a0a0a66;--dot-side-color:#ffffff;--dot-side-opacity:.05;
+  --hero-surface:#0a0a0a;--hero-paper:#0a0a0a;--hero-title:#ededed;--hero-title-shadow:0 2px 18px #000;--hero-fine-dot:#ffffff59;--hero-mask-center:#0009;--hero-mask-middle:#000d;
+  --t-btn-bg:#111111;--t-btn-hover:#1f1f1f;--t-btn-ring:0 0 0 1px #2e2e2e;
+  --t-pri-bg:#ededed;--t-pri-fg:#0a0a0a;--t-pri-hover:#cccccc;
+  --t-tint-bg:#1f1f1f;--t-tint-hover:#292929;
+  --t-seg-bg:#1a1a1a;--t-seg-on:#0a0a0a;--t-seg-on-ring:0 0 0 1px #2e2e2e;
+  --t-comp-ring:0 0 0 1px #2e2e2e;--t-comp-focus:0 0 0 1px #454545,0 0 0 4px #ffffff0f;
+  --t-send-bg:#ededed;--t-send-fg:#0a0a0a;
+  --t-inline-code:#1f1f1f;--t-code-bg:#0a0a0a;--t-code-ring:0 0 0 1px #2e2e2e;
+  --t-glow:inset 0 0 0 1px #3291ff59,inset 0 0 56px 6px #0070f31f;
+  --t-status-bg:#111111;--t-status-fg:#ededed;--t-status-ring:0 0 0 1px #2e2e2e;--t-status-track:#2e2e2e;--t-status-head:#ededed;
+  --t-sel-bg:#0070f359;
+  color-scheme:dark;
+}
+:root[data-style="vercel"] .hero-title{font-weight:600;letter-spacing:-.05em}
+:root[data-style="vercel"] .page-head h1{font-weight:600;font-size:32px;letter-spacing:-.04em}
+:root[data-style="vercel"] h2{letter-spacing:-.02em}
+:root[data-style="vercel"] .btn{letter-spacing:-.02em}
