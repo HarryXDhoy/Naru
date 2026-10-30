@@ -14,7 +14,7 @@ let dots: [(CGFloat, CGFloat)] = (0..<2).flatMap { row in
 let circles = dots.map { "  <circle cx=\"\($0.0)\" cy=\"\($0.1)\" r=\"30\"/>" }.joined(separator: "\n")
 let svg = """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <rect x="96" y="96" width="832" height="832" rx="196" fill="#1d6bd5"/>
+  <rect x="96" y="96" width="832" height="832" rx="196" fill="#000000"/>
   <g fill="#ffffff">
 \(circles)
   </g>
@@ -27,7 +27,7 @@ let transform = NSAffineTransform()
 transform.translateX(by: 0, yBy: 1024)
 transform.scaleX(by: 1, yBy: -1)
 transform.concat()
-NSColor(srgbRed: 29 / 255, green: 107 / 255, blue: 213 / 255, alpha: 1).setFill()
+NSColor.black.setFill()
 NSBezierPath(roundedRect: NSRect(x: 96, y: 96, width: 832, height: 832), xRadius: 196, yRadius: 196).fill()
 NSColor.white.setFill()
 for (x, y) in dots { NSBezierPath(ovalIn: NSRect(x: x - 30, y: y - 30, width: 60, height: 60)).fill() }
