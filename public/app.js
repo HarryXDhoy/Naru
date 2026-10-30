@@ -769,7 +769,7 @@ function modelOptions(p){
 function modelMenuHTML(query=''){
  const parts=[],term=String(query).trim().toLocaleLowerCase();let matches=0;
  for(const p of providers()){
-  const acct=isAccount(p)?accountOf(p):null,locked=acct&&(acct.execution_blocked||!acct.available||!acct.authenticated),state=S.modelFetch[p.id]||{};
+  const acct=isAccount(p)?accountOf(p):null,locked=acct&&(acct.execution_blocked||!acct.available||(!acct.authenticated&&!acct.status_unknown)),state=S.modelFetch[p.id]||{};
   const providerMatch=!term||`${p.name} ${p.id}`.toLocaleLowerCase().includes(term);
   const models=modelOptions(p).filter(m=>providerMatch||(m||tr('기본 모델')).toLocaleLowerCase().includes(term));
   if(!providerMatch&&(!models.length||locked))continue;
@@ -1083,6 +1083,7 @@ function renderModels(){
   const st=a?.[key];let badge='',sub='',act='';
   if(!st)badge=tr('<span class="spinner" role="img" aria-label="확인하는 중"></span>');
   else if(st.execution_blocked){badge=tr('<span class="badge attention">사용 일시 중지</span>');sub=key==='gemini_cli'?tr('도구 격리 검증 중 · Gemini API를 사용하세요.'):tr('도구 격리 검증 중 · 다른 모델의 API를 사용하세요.');act=tr('<button type="button" class="btn sm" data-act="add-provider">API 연결 추가</button>');}
+  else if(key==='antigravity'&&st.status_unknown){badge='<span class="badge neutral">CLI</span>';act=tr`<button type="button" class="btn sm" data-act="account-use" data-id="antigravity">대화 시작</button><button type="button" class="btn sm ghost" data-act="account-login" data-id="antigravity">로그인</button>`;}
   else if(key==='gemini_cli'&&!st.authenticated){badge='<span class="badge neutral">API</span>';sub=tr('개인 Google 계정의 CLI 로그인이 종료됐어요. API 키로 연결하세요.');act=tr`<button type="button" class="btn sm" data-act="add-provider" data-preset="gemini">Gemini API 연결</button>${st.available?tr('<button type="button" class="btn sm ghost" data-act="account-login" data-id="gemini_cli">기업 계정 로그인</button>'):''}`;}
   else if(key!=='openrouter'&&!st.available){badge=tr('<span class="badge neutral">설치 필요</span>');sub=st.install?`<code>${esc(st.install)}</code>`:'';act=tr`<button type="button" class="btn sm" data-act="copy-install" data-id="${key}">설치 명령 복사${icon('copy')}</button>`;}
   else if(!st.authenticated){badge=tr('<span class="badge attention">로그인 필요</span>');act=tr`<button type="button" class="btn sm" data-act="account-login" data-id="${key}">로그인</button>`;}
@@ -1117,7 +1118,7 @@ async function runWorkflow(id){
  const p=provider(),acct=accountOf(p);
  if(!p){go('models');toast(tr('먼저 모델을 연결하세요.'));return;}
  if(isAccount(p)&&acct?.execution_blocked){go('models');toast(acct.message||tr('이 계정 연결은 사용할 수 없습니다.'),true);return;}
- if(isAccount(p)&&acct&&(!acct.available||!acct.authenticated)){go('models');toast(tr`${p.name} 연결 상태를 확인하세요.`,true);return;}
+ if(isAccount(p)&&acct&&(!acct.available||(!acct.authenticated&&!acct.status_unknown))){go('models');toast(tr`${p.name} 연결 상태를 확인하세요.`,true);return;}
  if(!isAccount(p)&&!S.model&&!p.model){toast(tr('대화에서 사용할 모델을 먼저 선택하세요.'),true);return;}
  const pageEl=$('page'),epoch=S.epoch,model=S.model,mode=w.mode,skillIds=selectedSkills().map(s=>s.id),content=w.prompt;S.workflowStarting=true;
  try{
@@ -1227,6 +1228,7 @@ async function accountLogin(key){
  const r=await api(`/api/accounts/${enc(key)}/login`,{method:'POST',body:{}});
  if(r.url){await openExternal(r.url);toast(tr('브라우저에서 OpenRouter 로그인을 마치세요.'));}
  else toast(r.terminal?tr('터미널에서 로그인을 마치면 자동으로 확인해요.'):tr('브라우저에서 로그인을 마치면 자동으로 확인해요.'));
+ if(key==='antigravity'){clearInterval(S.watch);return;}
  clearInterval(S.watch);let n=0;
  S.watch=setInterval(async()=>{n++;try{S.accounts=await api('/api/accounts?refresh=1');if(S.accounts[key]?.authenticated){clearInterval(S.watch);await refreshState();toast(tr`${ACCOUNT_NAMES[key]} 연결됨`,false,{label:'대화 시작',run:()=>accountUse(key).catch(err=>toast(err.message,true))});}if(S.view==='models')renderModels();}catch{}if(n>75)clearInterval(S.watch);},4000);
 }

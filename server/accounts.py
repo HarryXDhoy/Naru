@@ -134,10 +134,8 @@ def _account_status(kind):
         return {"available": False, "authenticated": False, "message": f"{spec['name']} CLI가 없습니다. 설치한 뒤 로그인하세요."}
     try:
         if kind == "antigravity":
-            out = subprocess.run([binary, "-p", "/usage", "--output-format", "json"], capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL, env=_env(binary, kind))
-            data = json.loads(out.stdout or "{}")
-            signed = out.returncode == 0 and data.get("status") == "SUCCESS" and bool(data.get("command", {}).get("data", {}).get("groups"))
-            return {"available": True, "authenticated": signed, "message": "Antigravity 연결됨" if signed else "Antigravity 로그인이 필요합니다."}
+            # Read-only status: agy /usage can launch OAuth even with stdin closed.
+            return {"available": True, "authenticated": False, "status_unknown": True, "message": "Antigravity 인증은 요청할 때 확인합니다."}
         if kind == "claude_code":
             result = subprocess.run([binary, "auth", "status"], capture_output=True, text=True, timeout=20, env=_env(binary, kind), stdin=subprocess.DEVNULL)
             if result.returncode == 0:

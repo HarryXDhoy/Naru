@@ -40,8 +40,9 @@ class AntigravityTests(unittest.TestCase):
     def test_model_catalog_does_not_prove_sign_in(self):
         from types import SimpleNamespace
         result=SimpleNamespace(returncode=0, stdout=json.dumps({'status':'SUCCESS','command':{'data':{'groups':[]}}}))
-        with patch.object(accounts,'executable',return_value='/mock/agy'),patch.object(accounts.subprocess,'run',return_value=result):
+        with patch.object(accounts,'executable',return_value='/mock/agy'),patch.object(accounts.subprocess,'run',return_value=result) as probe:
             self.assertFalse(accounts._account_status('antigravity')['authenticated'])
+            probe.assert_not_called()
 
     def test_runtime_without_required_controls_is_blocked(self):
         with patch.object(accounts,'_help_text',return_value='--print'):
