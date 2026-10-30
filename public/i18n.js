@@ -1,6 +1,10 @@
 /* UI-only translations. Interpolated user content is never translated. */
 (()=>{'use strict';
 const en={
+ "개인 Google 계정의 CLI 로그인이 종료됐어요. API 키로 연결하세요.": "Personal Google account sign-in for Gemini CLI has ended. Connect with an API key.",
+ "Gemini API 연결": "Connect Gemini API",
+ "기업 계정 로그인": "Organization sign-in",
+ "Google이 개인 계정의 Gemini CLI 로그인을 종료했습니다. Gemini API 또는 OpenRouter 연결을 사용하세요.": "Google has ended personal account sign-in for Gemini CLI. Use Gemini API or OpenRouter instead.",
  "GitHub Copilot CLI에 필요한 Node.js 24 이상을 찾지 못했습니다. Node.js를 설치한 뒤 다시 연결하세요.": "GitHub Copilot CLI needs Node.js 24 or later. Install a compatible Node.js runtime, then reconnect.",
  "첨부 이미지": "Attached image",
  "로컬 서버에 연결할 수 없어요. 앱을 다시 열어 주세요.": "Cannot connect to the local server. Reopen Naru.",

@@ -386,6 +386,8 @@ def _usage(value):
 def _explain(kind, text):
     name = SPECS[kind]["name"]
     low = (text or "").lower()
+    if kind == "gemini_cli" and ("client is no longer supported" in low or "unsupported_client" in low):
+        return "Google이 개인 계정의 Gemini CLI 로그인을 종료했습니다. Gemini API 또는 OpenRouter 연결을 사용하세요."
     if any(k in low for k in ("not logged in", "login", "unauthorized", "authenticate", "auth", "401")):
         return f"{name} 로그인이 필요합니다. 모델 화면에서 {name} 로그인을 눌러 주세요."
     return f"{name} 실행이 실패했습니다: " + (text or "응답이 없습니다.")[:900]

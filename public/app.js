@@ -997,9 +997,9 @@ const PRESETS={openai:{name:'OpenAI',kind:'responses',base_url:'https://api.open
 // More OpenAI-compatible services, offered in a list beside the common ones.
 const MORE_PRESETS=['deepseek','xai','mistral','groq','together','fireworks','cerebras','perplexity','moonshot','zai','minimax','qwen','huggingface','nous','vllm','llamacpp','jan'];
 const PRESET_NAMES=[['openai','OpenAI'],['anthropic','Claude API'],['gemini','Gemini API'],['ollama','Ollama'],['lmstudio','LM Studio'],['openrouter',tr('OpenRouter 키')],['custom',tr('직접 입력')]];
-function editProvider(id){
- const old=providerById(id);const v=old?{...old}:{...PRESETS.openai,model:'',tools_enabled:true};
- const dlg=openDialog(old?tr('연결 편집'):tr('새 연결'),tr`${old?'':tr`<div class="presets" role="group" aria-label="빠른 설정">${PRESET_NAMES.map(([k,n],i)=>`<button type="button" class="${i===0?'on':''}" data-preset="${k}">${n}</button>`).join('')}</div><div class="field more-presets"><label for="pf-more">${tr('다른 제공자')}</label><select id="pf-more"><option value="">${tr('목록에서 고르기')}</option>${MORE_PRESETS.map(k=>`<option value="${k}">${esc(PRESETS[k].name)}</option>`).join('')}</select></div>`}
+function editProvider(id,preset='openai'){
+ const old=providerById(id);const v=old?{...old}:{...(PRESETS[preset]||PRESETS.openai),model:'',tools_enabled:true};
+ const dlg=openDialog(old?tr('연결 편집'):tr('새 연결'),tr`${old?'':tr`<div class="presets" role="group" aria-label="빠른 설정">${PRESET_NAMES.map(([k,n],i)=>`<button type="button" class="${k===preset?'on':''}" data-preset="${k}">${n}</button>`).join('')}</div><div class="field more-presets"><label for="pf-more">${tr('다른 제공자')}</label><select id="pf-more"><option value="">${tr('목록에서 고르기')}</option>${MORE_PRESETS.map(k=>`<option value="${k}">${esc(PRESETS[k].name)}</option>`).join('')}</select></div>`}
  <form class="form" id="provider-form"><div class="grid2"><div class="field"><label for="pf-name">이름</label><input id="pf-name" name="name" required maxlength="80" value="${esc(v.name)}"></div><div class="field"><label for="pf-kind">API 형식</label><select id="pf-kind" name="kind">${['responses','openai','anthropic','gemini','ollama'].map(k=>`<option value="${k}"${k===v.kind?' selected':''}>${KIND_LABEL[k]}</option>`).join('')}</select></div></div>
  <div class="field"><label for="pf-url">서버 주소</label><input id="pf-url" name="base_url" type="url" required value="${esc(v.base_url)}" placeholder="http://127.0.0.1:1234/v1"></div>
  <div class="field"><label for="pf-model">기본 모델</label><input id="pf-model" name="model" value="${esc(v.model||'')}" placeholder="비워 두면 대화에서 골라요" autocomplete="off"></div>
@@ -1083,6 +1083,7 @@ function renderModels(){
   const st=a?.[key];let badge='',sub='',act='';
   if(!st)badge=tr('<span class="spinner" role="img" aria-label="확인하는 중"></span>');
   else if(st.execution_blocked){badge=tr('<span class="badge attention">사용 일시 중지</span>');sub=key==='gemini_cli'?tr('도구 격리 검증 중 · Gemini API를 사용하세요.'):tr('도구 격리 검증 중 · 다른 모델의 API를 사용하세요.');act=tr('<button type="button" class="btn sm" data-act="add-provider">API 연결 추가</button>');}
+  else if(key==='gemini_cli'&&!st.authenticated){badge='<span class="badge neutral">API</span>';sub=tr('개인 Google 계정의 CLI 로그인이 종료됐어요. API 키로 연결하세요.');act=tr`<button type="button" class="btn sm" data-act="add-provider" data-preset="gemini">Gemini API 연결</button>${st.available?tr('<button type="button" class="btn sm ghost" data-act="account-login" data-id="gemini_cli">기업 계정 로그인</button>'):''}`;}
   else if(key!=='openrouter'&&!st.available){badge=tr('<span class="badge neutral">설치 필요</span>');sub=st.install?`<code>${esc(st.install)}</code>`:'';act=tr`<button type="button" class="btn sm" data-act="copy-install" data-id="${key}">설치 명령 복사${icon('copy')}</button>`;}
   else if(!st.authenticated){badge=tr('<span class="badge attention">로그인 필요</span>');act=tr`<button type="button" class="btn sm" data-act="account-login" data-id="${key}">로그인</button>`;}
   else{badge=tr('<span class="badge done">연결됨</span>');if(/API 키|@/.test(st.message||''))sub=esc(st.message);act=tr`<button type="button" class="btn sm" data-act="account-use" data-id="${key}">대화 시작</button>${key==='openrouter'?iconBtn('retry',tr('다시 로그인'),'account-login',key):''}`;}
@@ -1285,7 +1286,7 @@ const ACT={
  'account-login':el=>accountLogin(el.dataset.id),
  'account-use':el=>accountUse(el.dataset.id),
  'copy-install':el=>copyText((S.accounts||{})[el.dataset.id]?.install||'',tr('설치 명령을 복사했어요. 터미널에 붙여 넣으세요.')),
- 'add-provider':()=>editProvider(),
+ 'add-provider':el=>editProvider(null,el.dataset.preset||'openai'),
  'edit-provider':el=>editProvider(el.dataset.id),
  'delete-provider':el=>{const p=providerById(el.dataset.id);confirmDialog(tr`${p?.name||tr('연결')}을 삭제할까요?`,tr('저장된 키도 함께 지워져요. 지난 대화는 남아요.'),tr('삭제'),async()=>{await api(`/api/providers/${enc(el.dataset.id)}`,{method:'DELETE'});delete S.models[el.dataset.id];delete S.modelFetch[el.dataset.id];await refreshState();renderModels();toast(tr('삭제했어요'));});},
  'test-provider':async el=>{const id=el.dataset.id;S.tests[id]={pending:true};renderModels();try{const r=await api(`/api/providers/${enc(id)}/test`,{method:'POST',body:{}});S.tests[id]=r;if(r.models?.length)S.models[id]=r.models;}catch(err){S.tests[id]={ok:false,message:err.message};}if(S.view==='models')renderModels();},
