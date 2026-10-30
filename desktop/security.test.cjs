@@ -44,3 +44,5 @@ test('persistent UI preferences accept only bounded known values', () => {
 });
 
 test("language preference accepts Korean and English only",()=>{const {validPreference}=require("./security.cjs");assert.equal(validPreference("language","ko"),true);assert.equal(validPreference("language","en"),true);assert.equal(validPreference("language","xx"),false);});
+
+test("style preference accepts the five themes only",()=>{const {validPreference}=require("./security.cjs");for(const v of ["naru","defined","cursor","vercel","raycast"])assert.equal(validPreference("style",v),true);for(const v of ["blue","Cursor","",{}])assert.equal(validPreference("style",v),false);assert.equal(validPreference("style",null),true);});
