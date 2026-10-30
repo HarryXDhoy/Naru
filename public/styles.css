@@ -388,8 +388,9 @@ button.top-title:hover{background:var(--bg-alpha-2)}
 .btn:hover{background:var(--fg-2)}
 .btn:active{transform:scale(.98)}
 .btn svg{width:16px;height:16px}
-.btn.primary{color:var(--blue-1);background:linear-gradient(to right,var(--blue-10) 64%,var(--blue-5) 95%);box-shadow:var(--shadow-0)}
-.btn.primary:hover{background:linear-gradient(to right,var(--blue-10) 50%,var(--blue-5) 95%)}
+.btn.primary{color:#fff;background:var(--blue-6);box-shadow:var(--shadow-0)}
+.btn.primary:enabled:hover{background:var(--blue-7)}
+.btn.primary:enabled:active{background:var(--blue-8)}
 .btn.tint{color:var(--blue-8);background:var(--accent-bg);box-shadow:none}
 .btn.tint:hover{background:var(--blue-1)}
 .btn.ghost{background:transparent;box-shadow:none;color:var(--text-1)}
