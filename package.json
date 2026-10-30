@@ -1,7 +1,7 @@
 {
   "name": "naru-harness",
   "productName": "Naru",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "description": "A personal desktop AI workspace with local and cloud model connections",
   "private": true,
   "main": "desktop/main.cjs",

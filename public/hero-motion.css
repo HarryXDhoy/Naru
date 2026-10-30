@@ -23,3 +23,14 @@
 .hero-title{color:var(--hero-title);text-shadow:var(--hero-title-shadow)}
 .sheet:has(.chat.empty) .top .icon-btn{color:var(--hero-title)}
 @media(max-width:760px){.hero-title{font-size:30px}}
+
+/* Naru's sea palette. The other styles keep their own HalftoneField colors. */
+:root:not([data-style]){
+ --fluid-ultramarine:#1d64f2;--fluid-cyan:#46b7ff;--fluid-lime:#1745b5;--fluid-amber:#0c2b6b;--fluid-magenta:#87d4ff;
+ --hero-fine-dot:#87bfff80;
+}
+:root:not([data-style])[data-mode="light"]{
+ --fluid-ultramarine:#124a9c;--fluid-cyan:#3297ed;--fluid-lime:#0757b6;--fluid-amber:#16396e;--fluid-magenta:#6db8ff;
+ --hero-fine-dot:#1d64b53d;
+}
+:root:not([data-style]) .hero-pattern span{filter:grayscale(1) sepia(1) saturate(3) hue-rotate(170deg)}
