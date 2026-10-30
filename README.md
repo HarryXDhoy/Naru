@@ -1,6 +1,6 @@
 # Naru
 
-개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·OpenRouter 계정과 로컬·클라우드 모델 서버를 연결합니다. Gemini·GitHub Copilot CLI 계정 실행은 현재 일시 중지 중입니다. 화면은 Defined 스타일의 헤어라인 카드와 컬러 하프톤을 사용하고, ego(lite) 움직임과 [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
+개인의 모델, 대화, 작업, 스킬을 한곳에서 다루는 macOS 데스크톱 AI 하네스입니다. ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정과 로컬·클라우드 모델 서버를 연결합니다. 화면은 Defined 스타일의 헤어라인 카드와 컬러 하프톤을 사용하고, ego(lite) 움직임과 [도트 패턴 규칙](docs/DOT-PATTERN.md)을 적용합니다.
 
 ## 다운로드
 
@@ -32,14 +32,14 @@ npm run web        # 브라우저용: http://127.0.0.1:4317
 | --- | --- | --- |
 | ChatGPT | 공식 Codex CLI 로그인 | `npm install -g @openai/codex` |
 | Claude | 공식 Claude Code CLI 로그인 (Pro·Max 구독) | `npm install -g @anthropic-ai/claude-code` |
-| Gemini | CLI 계정 실행 일시 중지; Gemini API 연결 사용 | API 키 |
-| GitHub Copilot | CLI 계정 실행 일시 중지 | 격리 검증 필요 |
+| Gemini | 공식 Gemini CLI의 Google 로그인. CLI 도구는 모두 꺼진 채 실행 | `npm install -g @google/gemini-cli` |
+| GitHub Copilot | 공식 Copilot CLI 로그인. CLI 도구는 모두 꺼진 채 실행 | `npm install -g @github/copilot` |
 | OpenRouter | OAuth PKCE. 발급된 키는 macOS 키체인에 저장 | 없음 |
 
 - CLI가 없으면 *설치 명령 복사* 버튼이 나옵니다. 로그인 버튼은 터미널이나 브라우저에서 공식 로그인을 시작하고, 끝나면 Naru가 자동으로 확인합니다.
 - 계정 연결의 대화 모드는 CLI의 도구·MCP·세션 저장을 끄고 답만 받습니다. 에이전트 모드에서 CLI는 도구 *계획*만 내고, 파일 쓰기·수정·명령은 Naru의 승인 흐름을 거쳐 Naru가 실행합니다.
 - Claude Code가 `ANTHROPIC_API_KEY`를 보고 있으면 구독 대신 API 과금이 될 수 있어, Naru는 이 변수를 CLI에 넘기지 않습니다.
-- Gemini·Copilot CLI 계정 실행은 CLI 자체의 도구와 MCP가 Naru 승인 흐름 밖에서 실행되는 것을 확실히 차단할 수 없어 일시 중지했습니다. Gemini는 API 연결을 사용할 수 있습니다. Claude CLI는 안전 모드를 사용하며 관리자 정책으로 강제된 훅은 예외일 수 있습니다.
+- Gemini·Copilot CLI는 자체 도구 없이 실행됩니다. Gemini는 모든 도구를 거부하는 관리자 정책 파일과 MCP·확장 비활성화로, Copilot은 `--available-tools`로 모델이 볼 수 있는 도구를 0개로 만들고 내장 MCP를 끕니다. 두 CLI가 모델에 보내는 요청을 가로채 도구 0개임을 확인했습니다. 이 Mac에 Gemini 시스템 관리자 정책이 있거나 CLI가 오래돼 이 옵션이 없으면 실행하지 않고 이유를 보여 줍니다. Claude CLI는 안전 모드를 사용하며 관리자 정책으로 강제된 훅은 예외일 수 있습니다.
 - 사용할 수 있는 모델과 사용량 한도는 각 계정의 요금제를 따릅니다.
 - Kimi Code는 비대화형 실행이 도구를 승인 없이 실행하는 구조라 계정 연결에 넣지 않았습니다. API 키로는 OpenAI 호환 연결에서 쓸 수 있습니다.
 

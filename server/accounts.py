@@ -76,16 +76,13 @@ def executable(kind):
 
 def _env(binary, kind):
     env = os.environ.copy()
+    # Claude API 키 연결을 위해 ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN 등은 그대로 유지합니다.
     folders = [str(Path(binary).parent)] + [p for p in env.get("PATH", "").split(os.pathsep) if p]
     for extra in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"):
         if extra not in folders:
             folders.append(extra)
     env["PATH"] = os.pathsep.join(dict.fromkeys(folders))
     env["NO_COLOR"] = "1"
-    if kind == "claude_code":
-        # An account connection must use the signed-in subscription, not a stray API key.
-        for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
-            env.pop(key, None)
     return env
 
 
@@ -129,18 +126,54 @@ def _account_status(kind):
     return {"available": False, "authenticated": False, "message": ""}
 
 
-CLI_EXECUTION_BLOCKED = {"gemini_cli", "copilot_cli"}
+# Account CLIs must never run their own tools: Naru executes tools itself, with approvals.
+# Gemini: an admin-tier policy denies every tool (denied tools are removed from the model's view),
+#         MCP servers and extensions are not loaded.
+# Copilot: --available-tools names no real tool, so the model sees none; built-in MCP servers are off and
+#          shell, write and URL access are denied as a second line.
+# Both were verified by capturing the request each CLI sends to its model: zero tools offered.
+GEMINI_DENY_ALL = '[[rule]]\ntoolName = "*"\ndecision = "deny"\npriority = 999\ndenyMessage = "Naru runs tools itself."\n'
+GEMINI_SYSTEM_POLICY_DIRS = ("/Library/Application Support/GeminiCli/policies", "/etc/gemini-cli/policies")
+COPILOT_ISOLATION = ["--available-tools=naru_no_tools", "--disable-builtin-mcps", "--no-custom-instructions",
+                     "--deny-tool=shell", "--deny-tool=write", "--deny-tool=url", "--disallow-temp-dir", "--no-ask-user"]
+_HELP_CACHE = {}
 
 
-def _blocked_message(kind):
-    alternative = "Gemini API 키 연결을 사용하세요." if kind == "gemini_cli" else "다른 모델 제공자의 API 연결을 사용하세요."
-    return f"{SPECS[kind]['name']} CLI 계정 연결은 도구 격리 검증이 완료될 때까지 일시 중지되었습니다. {alternative}"
+def _help_text(binary):
+    try:
+        key = (binary, os.stat(binary).st_mtime)
+    except OSError:
+        return ""
+    if key not in _HELP_CACHE:
+        try:
+            out = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+            _HELP_CACHE[key] = (out.stdout or "") + (out.stderr or "")
+        except (OSError, subprocess.TimeoutExpired):
+            _HELP_CACHE[key] = ""
+    return _HELP_CACHE[key]
+
+
+def _isolation_problem(kind, binary=None):
+    """Why this CLI cannot be run with its tools switched off, or None when it can."""
+    if kind == "gemini_cli":
+        # A system-wide admin policy makes Gemini ignore the --admin-policy file Naru supplies.
+        for folder in GEMINI_SYSTEM_POLICY_DIRS:
+            if glob.glob(os.path.join(folder, "*.toml")):
+                return "이 Mac에 Gemini CLI 관리자 정책이 있어 Naru가 CLI 도구를 끌 수 없습니다. Gemini API 키 연결을 사용하세요."
+        if binary and "--admin-policy" not in _help_text(binary):
+            return "설치된 Gemini CLI가 오래되어 도구를 끌 수 없습니다. npm install -g @google/gemini-cli 로 업데이트하세요."
+    if kind == "copilot_cli" and binary:
+        if "--available-tools" not in _help_text(binary) or "--disable-builtin-mcps" not in _help_text(binary):
+            return "설치된 GitHub Copilot CLI가 오래되어 도구를 끌 수 없습니다. npm install -g @github/copilot 으로 업데이트하세요."
+    return None
 
 
 def status(kind):
     result = _account_status(kind)
-    if kind in CLI_EXECUTION_BLOCKED:
-        result = dict(result, execution_blocked=True, message=_blocked_message(kind))
+    if result.get("available"):
+        problem = _isolation_problem(kind, executable(kind))
+        if problem:
+            result = dict(result, execution_blocked=True, message=problem)
     return result
 
 
@@ -170,6 +203,7 @@ def start_login(kind):
         command,
         "echo",
         "echo " + shlex.quote("Naru로 돌아가 연결 상태를 새로고침하세요."),
+        "rm -rf " + shlex.quote(str(folder)),
         "",
     ]), encoding="utf-8")
     os.chmod(script, 0o700)
@@ -340,11 +374,12 @@ def _claude_args(binary, system_file, model, extra):
 
 def _invoke(provider, messages, on_delta, cancel, plan=False, tools=None, max_tokens=4096):
     kind = provider["kind"]
-    if kind in CLI_EXECUTION_BLOCKED:
-        raise AccountError(_blocked_message(kind))
     binary = executable(kind)
     if not binary:
         raise AccountError(f"{SPECS[kind]['name']} CLI가 없습니다. {SPECS[kind]['install']} 로 설치하세요.")
+    problem = _isolation_problem(kind, binary)
+    if problem:
+        raise AccountError(problem)
     env = _env(binary, kind)
     model = provider.get("model") or ""
     system = _system(messages)
@@ -415,7 +450,11 @@ def _invoke(provider, messages, on_delta, cancel, plan=False, tools=None, max_to
             return {"content": content, "usage": _usage(result.get("usage"))}
         if kind == "gemini_cli":
             full = ("SYSTEM INSTRUCTIONS:\n" + system + "\n\n" if system else "") + prompt
-            args = [binary, "-p", "Follow the instructions above.", "--approval-mode", "default"]
+            policy = os.path.join(folder, "naru-deny-all-tools.toml")
+            Path(policy).write_text(GEMINI_DENY_ALL, encoding="utf-8")
+            env = dict(env, GEMINI_CLI_TRUST_WORKSPACE="true")
+            args = [binary, "-p", "Follow the instructions above.", "--approval-mode", "default", "--admin-policy", policy,
+                    "--allowed-mcp-server-names", "naru-none", "-e", "none"]
             if model and model != "auto":
                 args += ["-m", model]
             if plan:
@@ -444,7 +483,7 @@ def _invoke(provider, messages, on_delta, cancel, plan=False, tools=None, max_to
             return {"content": content, "usage": _usage(result.get("stats"))}
         if kind == "copilot_cli":
             full = ("SYSTEM INSTRUCTIONS:\n" + system + "\n\n" if system else "") + prompt
-            args = [binary, "-p", full, "-s", "--no-ask-user", "--deny-tool", "shell", "--deny-tool", "write"]
+            args = [binary, "-p", full, "-s"] + COPILOT_ISOLATION
             if model:
                 args += ["--model", model]
             raw = []

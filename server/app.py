@@ -511,7 +511,13 @@ class Runtime:
             self.oauth_pending[state]={'verifier':verifier,'t':time.monotonic()}
         # Preserve state inside the callback URL as well as the auth request;
         # OpenRouter documents both forms. Match the IPv4 address we bind to.
-        callback=f'http://127.0.0.1:{self.port}/oauth/openrouter/callback?'+urlencode({'state':state})
+        port=self.port
+        if not port:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('127.0.0.1', 0))
+                port=s.getsockname()[1]
+            self.port=port
+        callback=f'http://127.0.0.1:{port}/oauth/openrouter/callback?'+urlencode({'state':state})
         return {'started':True,'url':'https://openrouter.ai/auth?'+urlencode({'callback_url':callback,'code_challenge':challenge,'code_challenge_method':'S256','state':state,'key_label':'Naru'})}
     def openrouter_finish(self,code,state):
         with self.lock:pending=self.oauth_pending.pop(state or '',None)

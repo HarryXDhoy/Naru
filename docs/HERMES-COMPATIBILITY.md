@@ -4,7 +4,7 @@
 
 | 기능 | Naru의 현재 상태 |
 | --- | --- |
-| 모델 제공자, 로컬 서버 | ChatGPT·Claude·OpenRouter 계정과 API, Ollama·LM Studio 연결. 모델과 서버별 도구 지원은 다를 수 있습니다. Gemini·Copilot CLI 계정 실행은 격리 검증 전까지 중지했습니다. Gemini API는 사용할 수 있습니다. |
+| 모델 제공자, 로컬 서버 | ChatGPT·Claude·Gemini·GitHub Copilot·OpenRouter 계정, OpenAI·Claude·Gemini API, DeepSeek·xAI·Mistral·Groq·Together·Fireworks·Cerebras·Perplexity·Kimi·Z.ai·MiniMax·Qwen·Hugging Face·Nous Portal 프리셋, Ollama·LM Studio·vLLM·llama.cpp·Jan 로컬 서버. 모델과 서버별 도구 지원은 다를 수 있습니다. |
 | 파일, 터미널, 웹 검색 | 파일 읽기·검색·변경, 명령 실행, 공개 페이지 읽기, Ego Lite 검색 제공. Hermes의 모든 도구와 실행 환경은 미지원. 브라우저 페이지 읽기는 내부망 접근 격리 전까지 중지했습니다. |
 | 승인 및 접근 권한 | 매번 승인, 파일 변경·명령 자동 승인, 전체 접근 중 선택. 전체 접근에서 파일 도구의 폴더 제한이 해제됩니다. 터미널 명령은 모든 모드에서 OS 샌드박스 없이 사용자 권한으로 실행됩니다. |
 | 프로젝트 지침 | 에이전트·계획 실행 시 workspace 루트의 AGENTS.md, CLAUDE.md, .hermes.md, SOUL.md, .cursorrules를 제한적으로 읽어 모델에 전달. 하위 폴더 탐색은 미지원. |
